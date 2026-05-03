@@ -1,0 +1,233 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum JobStatus {
+  NEW
+  IN_PROGRESS
+  WAITING_PARTS
+  READY
+  DELIVERED
+  CANCELLED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum UserRole {
+  ADMIN
+  EMPLOYEE
+}
+
+enum CustomFieldEntity {
+  JOB
+  CUSTOMER
+  VEHICLE
+}
+
+enum CustomFieldType {
+  TEXT
+  NUMBER
+  DATE
+  BOOLEAN
+  SELECT
+}
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         UserRole @default(EMPLOYEE)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  createdJobs  Job[]    @relation("JobCreator")
+  assignedJobs Job[]    @relation("JobAssignee")
+
+  @@map("users")
+}
+
+// ─── Customers ────────────────────────────────────────────────────────────────
+
+model Customer {
+  id        String   @id @default(uuid())
+  name      String
+  email     String?  @unique
+  phone     String
+  address   String?
+  taxNumber String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vehicles          Vehicle[]
+  jobs              Job[]
+  customFieldValues CustomFieldValue[]
+
+  @@map("customers")
+}
+
+// ─── Vehicles ─────────────────────────────────────────────────────────────────
+
+model Vehicle {
+  id         String   @id @default(uuid())
+  customerId String
+  make       String
+  model      String
+  year       Int
+  plate      String   @unique
+  vin        String?  @unique
+  color      String?
+  mileage    Int?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  customer          Customer           @relation(fields: [customerId], references: [id])
+  jobs              Job[]
+  customFieldValues CustomFieldValue[]
+
+  @@map("vehicles")
+}
+
+// ─── Jobs (central entity) ────────────────────────────────────────────────────
+
+model Job {
+  id           String    @id @default(uuid())
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  createdById  String
+  customerId   String
+  vehicleId    String?
+  assignedToId String?
+
+  description    String
+  damageType     String?
+  priority       Priority  @default(MEDIUM)
+  status         JobStatus @default(NEW)
+  estimatedPrice Decimal?  @db.Decimal(10, 2)
+  finalPrice     Decimal?  @db.Decimal(10, 2)
+  notes          String?
+  scheduledAt    DateTime?
+  completedAt    DateTime?
+
+  createdBy         User               @relation("JobCreator", fields: [createdById], references: [id])
+  customer          Customer           @relation(fields: [customerId], references: [id])
+  vehicle           Vehicle?           @relation(fields: [vehicleId], references: [id])
+  assignedTo        User?              @relation("JobAssignee", fields: [assignedToId], references: [id])
+  statusHistory     JobStatusHistory[]
+  inventoryUsage    JobInventoryItem[]
+  customFieldValues CustomFieldValue[]
+
+  @@map("jobs")
+}
+
+model JobStatusHistory {
+  id        String    @id @default(uuid())
+  jobId     String
+  status    JobStatus
+  changedAt DateTime  @default(now())
+  changedBy String?
+  note      String?
+
+  job Job @relation(fields: [jobId], references: [id])
+
+  @@map("job_status_history")
+}
+
+// ─── Inventory ────────────────────────────────────────────────────────────────
+
+model InventoryItem {
+  id        String   @id @default(uuid())
+  name      String
+  sku       String?  @unique
+  category  String?
+  quantity  Int      @default(0)
+  unit      String   @default("piece")
+  unitPrice Decimal  @db.Decimal(10, 2)
+  minStock  Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  jobUsage JobInventoryItem[]
+
+  @@map("inventory_items")
+}
+
+model JobInventoryItem {
+  id        String   @id @default(uuid())
+  jobId     String
+  itemId    String
+  quantity  Int
+  unitPrice Decimal  @db.Decimal(10, 2)
+  createdAt DateTime @default(now())
+
+  job  Job           @relation(fields: [jobId], references: [id])
+  item InventoryItem @relation(fields: [itemId], references: [id])
+
+  @@map("job_inventory_items")
+}
+
+// ─── Custom Fields ────────────────────────────────────────────────────────────
+
+model CustomField {
+  id        String            @id @default(uuid())
+  label     String
+  key       String
+  entity    CustomFieldEntity
+  type      CustomFieldType
+  required  Boolean           @default(false)
+  options   String?           // JSON array for SELECT type
+  sortOrder Int               @default(0)
+  createdAt DateTime          @default(now())
+
+  values CustomFieldValue[]
+
+  @@unique([key, entity])
+  @@map("custom_fields")
+}
+
+model CustomFieldValue {
+  id            String   @id @default(uuid())
+  customFieldId String
+  value         String?
+  jobId         String?
+  customerId    String?
+  vehicleId     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  customField CustomField @relation(fields: [customFieldId], references: [id])
+  job         Job?        @relation(fields: [jobId], references: [id])
+  customer    Customer?   @relation(fields: [customerId], references: [id])
+  vehicle     Vehicle?    @relation(fields: [vehicleId], references: [id])
+
+  @@map("custom_field_values")
+}
+
+// ─── Workflow Automation ──────────────────────────────────────────────────────
+
+model WorkflowRule {
+  id            String    @id @default(uuid())
+  name          String
+  triggerStatus JobStatus
+  action        String    // "send_sms" | "send_email" | "generate_pdf"
+  actionConfig  String?   // JSON config
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+
+  @@map("workflow_rules")
+}

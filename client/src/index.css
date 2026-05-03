@@ -1,0 +1,112 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary-50: #eff6ff;
+  --color-primary-100: #dbeafe;
+  --color-primary-500: #3b82f6;
+  --color-primary-600: #2563eb;
+  --color-primary-700: #1d4ed8;
+  --color-sidebar: #1e293b;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    background-color: #f9fafb;
+    color: #111827;
+    margin: 0;
+    font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+  }
+}
+
+@layer components {
+  .sidebar-link {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.625rem 1rem;
+    border-radius: 0.5rem;
+    color: #cbd5e1;
+    transition: background-color 0.15s, color 0.15s;
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: none;
+  }
+  .sidebar-link:hover {
+    background-color: #334155;
+    color: #fff;
+  }
+  .sidebar-link.active {
+    background-color: #2563eb;
+    color: #fff;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: background-color 0.15s;
+    cursor: pointer;
+    border: none;
+    text-decoration: none;
+  }
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .btn-primary {
+    background-color: #2563eb;
+    color: #fff;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background-color: #1d4ed8;
+  }
+  .btn-secondary {
+    background-color: #fff;
+    color: #374151;
+    border: 1px solid #d1d5db;
+  }
+  .btn-secondary:hover:not(:disabled) {
+    background-color: #f9fafb;
+  }
+  .btn-danger {
+    background-color: #dc2626;
+    color: #fff;
+  }
+  .btn-danger:hover:not(:disabled) {
+    background-color: #b91c1c;
+  }
+  .card {
+    background-color: #fff;
+    border-radius: 0.75rem;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
+  }
+  .input {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    font-family: inherit;
+  }
+  .input:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.125rem 0.625rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+}
