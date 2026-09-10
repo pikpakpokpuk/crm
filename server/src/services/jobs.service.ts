@@ -8,6 +8,7 @@ const JOB_INCLUDE = {
   vehicle: true,
   assignedTo: { select: { id: true, name: true, email: true } },
   createdBy: { select: { id: true, name: true } },
+  lineItems: { orderBy: { sortOrder: 'asc' as const } },
 } satisfies Prisma.JobInclude;
 
 export class JobsService {
@@ -46,13 +47,23 @@ export class JobsService {
     return job;
   }
 
-  async create(data: Prisma.JobUncheckedCreateInput) {
-    return prisma.job.create({ data, include: JOB_INCLUDE });
+  private sanitize(data: Record<string, unknown>) {
+    return {
+      ...data,
+      scheduledAt: data.scheduledAt ? new Date(data.scheduledAt as string) : null,
+      completedAt: data.completedAt ? new Date(data.completedAt as string) : undefined,
+      estimatedPrice: data.estimatedPrice != null && data.estimatedPrice !== '' ? new Prisma.Decimal(String(data.estimatedPrice)) : null,
+      finalPrice: data.finalPrice != null && data.finalPrice !== '' ? new Prisma.Decimal(String(data.finalPrice)) : null,
+    };
   }
 
-  async update(id: string, data: Prisma.JobUncheckedUpdateInput) {
+  async create(data: Record<string, unknown>) {
+    return prisma.job.create({ data: this.sanitize(data) as Prisma.JobUncheckedCreateInput, include: JOB_INCLUDE });
+  }
+
+  async update(id: string, data: Record<string, unknown>) {
     await this.findById(id);
-    return prisma.job.update({ where: { id }, data, include: JOB_INCLUDE });
+    return prisma.job.update({ where: { id }, data: this.sanitize(data) as Prisma.JobUncheckedUpdateInput, include: JOB_INCLUDE });
   }
 
   async updateStatus(id: string, status: JobStatus, userId: string, note?: string) {
@@ -74,6 +85,31 @@ export class JobsService {
   async delete(id: string) {
     await this.findById(id);
     await prisma.job.delete({ where: { id } });
+  }
+
+  async getLineItems(jobId: string) {
+    await this.findById(jobId);
+    return prisma.jobLineItem.findMany({ where: { jobId }, orderBy: { sortOrder: 'asc' } });
+  }
+
+  async updateLineItems(jobId: string, items: Array<{ name: string; type: string; qty: number; unit: string; unitPrice: number; vatPct: number }>) {
+    await this.findById(jobId);
+    await prisma.jobLineItem.deleteMany({ where: { jobId } });
+    if (items.length > 0) {
+      await prisma.jobLineItem.createMany({
+        data: items.map((item, i) => ({
+          jobId,
+          sortOrder: i,
+          name: item.name,
+          type: item.type || 'service',
+          qty: new Prisma.Decimal(String(item.qty ?? 1)),
+          unit: item.unit || 'hr',
+          unitPrice: new Prisma.Decimal(String(item.unitPrice ?? 0)),
+          vatPct: new Prisma.Decimal(String(item.vatPct ?? 27)),
+        })),
+      });
+    }
+    return prisma.jobLineItem.findMany({ where: { jobId }, orderBy: { sortOrder: 'asc' } });
   }
 }
 

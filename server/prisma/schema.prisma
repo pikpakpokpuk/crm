@@ -129,6 +129,7 @@ model Job {
   vehicle           Vehicle?           @relation(fields: [vehicleId], references: [id])
   assignedTo        User?              @relation("JobAssignee", fields: [assignedToId], references: [id])
   statusHistory     JobStatusHistory[]
+  lineItems         JobLineItem[]
   inventoryUsage    JobInventoryItem[]
   customFieldValues CustomFieldValue[]
 
@@ -159,12 +160,31 @@ model InventoryItem {
   unit      String   @default("piece")
   unitPrice Decimal  @db.Decimal(10, 2)
   minStock  Int?
+  notes     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   jobUsage JobInventoryItem[]
 
   @@map("inventory_items")
+}
+
+model JobLineItem {
+  id        String   @id @default(uuid())
+  jobId     String
+  sortOrder Int      @default(0)
+  name      String
+  type      String   @default("service")
+  qty       Decimal  @db.Decimal(10, 3)
+  unit      String   @default("hr")
+  unitPrice Decimal  @db.Decimal(10, 2)
+  vatPct    Decimal  @db.Decimal(5, 2) @default(27)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@map("job_line_items")
 }
 
 model JobInventoryItem {
@@ -230,4 +250,18 @@ model WorkflowRule {
   createdAt     DateTime  @default(now())
 
   @@map("workflow_rules")
+}
+
+// ─── Document Templates ───────────────────────────────────────────────────────
+
+model DocumentTemplate {
+  id        String   @id @default(uuid())
+  name      String
+  type      String   // "offer" | "deviz" | "invoice"
+  filename  String
+  path      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("document_templates")
 }

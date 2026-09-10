@@ -33,12 +33,33 @@ export class InventoryService {
     return item;
   }
 
-  async create(data: Prisma.InventoryItemCreateInput) {
-    return prisma.inventoryItem.create({ data });
+  async create(body: Record<string, unknown>) {
+    return prisma.inventoryItem.create({
+      data: {
+        name: body.name as string,
+        category: body.category as string ?? null,
+        quantity: Number(body.quantity) || 0,
+        unit: (body.unit as string) || 'piece',
+        unitPrice: new Prisma.Decimal(String(body.unitPrice ?? body.unit_price ?? 0)),
+        sku: (body.sku as string) || null,
+        notes: (body.notes as string) || null,
+        minStock: body.minStock != null ? Number(body.minStock) : null,
+      },
+    });
   }
 
-  async update(id: string, data: Prisma.InventoryItemUpdateInput) {
+  async update(id: string, body: Record<string, unknown>) {
     await this.findById(id);
+    const data: Prisma.InventoryItemUpdateInput = {};
+    if (body.name !== undefined) data.name = body.name as string;
+    if (body.category !== undefined) data.category = body.category as string;
+    if (body.quantity !== undefined) data.quantity = Number(body.quantity);
+    if (body.unit !== undefined) data.unit = body.unit as string;
+    if (body.unitPrice !== undefined) data.unitPrice = new Prisma.Decimal(String(body.unitPrice));
+    if (body.unit_price !== undefined) data.unitPrice = new Prisma.Decimal(String(body.unit_price));
+    if (body.sku !== undefined) data.sku = body.sku as string;
+    if (body.notes !== undefined) data.notes = body.notes as string;
+    if (body.minStock !== undefined) data.minStock = Number(body.minStock);
     return prisma.inventoryItem.update({ where: { id }, data });
   }
 

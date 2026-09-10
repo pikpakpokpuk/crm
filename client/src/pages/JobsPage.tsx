@@ -1,5 +1,7 @@
-import { useState } from 'react';
-import type { Job, JobStatus, Priority } from '@/types';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { api } from '@/lib/api';
+import type { Job, JobStatus, Priority, Customer, Vehicle } from '@/types';
 
 const STATUS_COLORS: Record<JobStatus, string> = {
   new: 'bg-gray-100 text-gray-700',
@@ -17,68 +19,206 @@ const PRIORITY_COLORS: Record<Priority, string> = {
   urgent: 'bg-red-100 text-red-700',
 };
 
-const MOCK_JOBS: Job[] = [
-  {
-    id: 'J-0124', created_at: '2026-04-29', created_by: '1',
-    customer_id: '1', description: 'Front bumper replacement',
-    damage_type: 'Collision', priority: 'high', status: 'in_progress',
-    estimated_price: 450, final_price: undefined,
-    customer: { id: '1', name: 'Kovács István', email: 'kovacs@email.hu', phone: '+36 30 123 4567', created_at: '2026-01-01' },
-    vehicle: { id: '1', customer_id: '1', make: 'BMW', model: '320d', year: 2019, plate: 'ABC-123' },
-  },
-  {
-    id: 'J-0123', created_at: '2026-04-28', created_by: '1',
-    customer_id: '2', description: 'Engine oil leak repair',
-    damage_type: 'Mechanical', priority: 'medium', status: 'waiting_parts',
-    estimated_price: 280,
-    customer: { id: '2', name: 'Nagy Péter', email: 'nagy@email.hu', phone: '+36 20 987 6543', created_at: '2026-02-01' },
-    vehicle: { id: '2', customer_id: '2', make: 'VW', model: 'Golf', year: 2021, plate: 'XYZ-789' },
-  },
-  {
-    id: 'J-0122', created_at: '2026-04-27', created_by: '1',
-    customer_id: '3', description: 'Full service + tire change',
-    damage_type: 'Service', priority: 'low', status: 'ready',
-    estimated_price: 180, final_price: 195,
-    customer: { id: '3', name: 'Szabó Anna', email: 'szabo@email.hu', phone: '+36 70 555 0000', created_at: '2026-03-01' },
-    vehicle: { id: '3', customer_id: '3', make: 'Opel', model: 'Astra', year: 2018, plate: 'DEF-456' },
-  },
-  {
-    id: 'J-0121', created_at: '2026-04-29', created_by: '1',
-    customer_id: '4', description: 'Brake system overhaul',
-    damage_type: 'Safety', priority: 'urgent', status: 'new',
-    estimated_price: 620,
-    customer: { id: '4', name: 'Tóth Gábor', email: 'toth@email.hu', phone: '+36 30 111 2222', created_at: '2026-04-01' },
-    vehicle: { id: '4', customer_id: '4', make: 'Ford', model: 'Focus', year: 2020, plate: 'GHI-012' },
-  },
-];
-
 const ALL_STATUSES: JobStatus[] = ['new', 'in_progress', 'waiting_parts', 'ready', 'delivered', 'cancelled'];
 
+interface JobsResponse { jobs: Job[]; total: number; page: number; pages: number; }
+interface CustomerWithVehicles extends Customer { vehicles: Vehicle[]; }
+interface EmployeeOption { id: string; name: string; }
+
+interface NewJobForm {
+  customerId: string;
+  vehicleId: string;
+  description: string;
+  damageType: string;
+  priority: string;
+  assignedToId: string;
+  scheduledAt: string;
+  estimatedPrice: string;
+  notes: string;
+}
+
+const EMPTY_FORM: NewJobForm = {
+  customerId: '', vehicleId: '', description: '', damageType: '',
+  priority: 'MEDIUM', assignedToId: '', scheduledAt: '', estimatedPrice: '', notes: '',
+};
+
+function NewJobModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const [form, setForm] = useState<NewJobForm>(EMPTY_FORM);
+  const [customers, setCustomers] = useState<CustomerWithVehicles[]>([]);
+  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    api.get<{ customers: CustomerWithVehicles[] }>('/customers?limit=100').then((r) => setCustomers(r.customers)).catch(console.error);
+    api.get<{ employees: EmployeeOption[] }>('/employees?limit=100').then((r) => setEmployees(r.employees)).catch(console.error);
+  }, []);
+
+  const set = (field: keyof NewJobForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setForm((f) => ({
+      ...f,
+      [field]: val,
+      ...(field === 'customerId' ? { vehicleId: '' } : {}),
+    }));
+  };
+
+  const selectedCustomer = customers.find((c) => c.id === form.customerId);
+  const vehicles = selectedCustomer?.vehicles ?? [];
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.customerId) { setError('Customer is required'); return; }
+    if (!form.description.trim()) { setError('Description is required'); return; }
+    setError('');
+    setSaving(true);
+    try {
+      await api.post('/jobs', {
+        customerId: form.customerId,
+        vehicleId: form.vehicleId || undefined,
+        description: form.description.trim(),
+        damageType: form.damageType.trim() || undefined,
+        priority: form.priority,
+        assignedToId: form.assignedToId || undefined,
+        scheduledAt: form.scheduledAt || undefined,
+        estimatedPrice: form.estimatedPrice ? parseFloat(form.estimatedPrice) : undefined,
+        notes: form.notes.trim() || undefined,
+      });
+      onSaved();
+      onClose();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-5">
+          <h3 className="text-lg font-semibold text-gray-900">New Job</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+        </div>
+
+        <form onSubmit={submit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Customer <span className="text-red-500">*</span></label>
+            <select className="input" value={form.customerId} onChange={set('customerId')}>
+              <option value="">Select customer...</option>
+              {customers.map((c) => <option key={c.id} value={c.id}>{c.name} — {c.phone}</option>)}
+            </select>
+          </div>
+
+          {vehicles.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Vehicle</label>
+              <select className="input" value={form.vehicleId} onChange={set('vehicleId')}>
+                <option value="">No vehicle</option>
+                {vehicles.map((v) => <option key={v.id} value={v.id}>{v.make} {v.model} {v.year} — {v.plate}</option>)}
+              </select>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Description <span className="text-red-500">*</span></label>
+            <textarea className="input resize-none" rows={2} value={form.description} onChange={set('description')} placeholder="What needs to be done..." />
+          </div>
+
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Damage Type</label>
+              <input className="input" value={form.damageType} onChange={set('damageType')} placeholder="e.g. scratch, dent..." />
+            </div>
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+              <select className="input" value={form.priority} onChange={set('priority')}>
+                <option value="LOW">Low</option>
+                <option value="MEDIUM">Medium</option>
+                <option value="HIGH">High</option>
+                <option value="URGENT">Urgent</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Assigned To</label>
+              <select className="input" value={form.assignedToId} onChange={set('assignedToId')}>
+                <option value="">Unassigned</option>
+                {employees.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+              </select>
+            </div>
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Scheduled Date</label>
+              <input className="input" type="date" value={form.scheduledAt} onChange={set('scheduledAt')} />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Estimated Price</label>
+            <input className="input" type="number" step="0.01" min="0" value={form.estimatedPrice} onChange={set('estimatedPrice')} placeholder="0.00" />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+            <textarea className="input resize-none" rows={2} value={form.notes} onChange={set('notes')} placeholder="Internal notes..." />
+          </div>
+
+          {error && <p className="text-sm text-red-600">{error}</p>}
+
+          <div className="flex justify-end gap-2 pt-1">
+            <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={saving}>
+              {saving ? 'Saving...' : 'Create Job'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function JobsPage() {
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<JobStatus | ''>('');
+  const [data, setData] = useState<JobsResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [showNew, setShowNew] = useState(false);
 
-  const filtered = MOCK_JOBS.filter((job) => {
-    const matchSearch =
-      !search ||
-      job.id.toLowerCase().includes(search.toLowerCase()) ||
-      job.customer?.name.toLowerCase().includes(search.toLowerCase()) ||
-      job.description.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = !statusFilter || job.status === statusFilter;
-    return matchSearch && matchStatus;
-  });
+  const loadJobs = () => {
+    const params = new URLSearchParams();
+    if (search) params.set('search', search);
+    if (statusFilter) params.set('status', statusFilter.toUpperCase());
+    setLoading(true);
+    api.get<JobsResponse>(`/jobs?${params.toString()}`)
+      .then(setData)
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { loadJobs(); }, [search, statusFilter]);
+
+  const jobs = data?.jobs ?? [];
 
   return (
     <div className="p-6 space-y-5">
+      {showNew && (
+        <NewJobModal onClose={() => setShowNew(false)} onSaved={loadJobs} />
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Jobs</h2>
-          <p className="text-gray-500 mt-1">{MOCK_JOBS.length} total jobs</p>
+          <p className="text-gray-500 mt-1">{data?.total ?? 0} total jobs</p>
         </div>
-        <button className="btn-primary">+ New Job</button>
+        <button className="btn btn-primary" onClick={() => setShowNew(true)}>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+          New Job
+        </button>
       </div>
 
-      {/* Filters */}
       <div className="flex gap-3 flex-wrap">
         <input
           className="input max-w-xs"
@@ -98,61 +238,63 @@ export default function JobsPage() {
         </select>
       </div>
 
-      {/* Table */}
       <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-gray-500 bg-gray-50 border-b border-gray-100">
-                <th className="px-5 py-3 font-medium">ID</th>
-                <th className="px-5 py-3 font-medium">Customer</th>
-                <th className="px-5 py-3 font-medium">Vehicle</th>
-                <th className="px-5 py-3 font-medium">Description</th>
-                <th className="px-5 py-3 font-medium">Status</th>
-                <th className="px-5 py-3 font-medium">Priority</th>
-                <th className="px-5 py-3 font-medium">Est. Price</th>
-                <th className="px-5 py-3 font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {filtered.map((job) => (
-                <tr key={job.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-5 py-3 font-mono text-blue-600 font-medium whitespace-nowrap">{job.id}</td>
-                  <td className="px-5 py-3 whitespace-nowrap">
-                    <p className="font-medium text-gray-900">{job.customer?.name}</p>
-                    <p className="text-gray-500 text-xs">{job.customer?.phone}</p>
-                  </td>
-                  <td className="px-5 py-3 whitespace-nowrap text-gray-600">
-                    {job.vehicle ? `${job.vehicle.make} ${job.vehicle.model} (${job.vehicle.plate})` : '—'}
-                  </td>
-                  <td className="px-5 py-3 text-gray-700 max-w-xs truncate">{job.description}</td>
-                  <td className="px-5 py-3">
-                    <span className={`badge ${STATUS_COLORS[job.status]}`}>
-                      {job.status.replace('_', ' ')}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3">
-                    <span className={`badge ${PRIORITY_COLORS[job.priority]}`}>
-                      {job.priority}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3 text-gray-700 whitespace-nowrap">
-                    {job.estimated_price ? `€${job.estimated_price}` : '—'}
-                  </td>
-                  <td className="px-5 py-3">
-                    <div className="flex gap-2">
-                      <button className="btn-secondary text-xs px-2 py-1">View</button>
-                      <button className="btn-secondary text-xs px-2 py-1">Edit</button>
-                    </div>
-                  </td>
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <div className="w-6 h-6 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-gray-500 bg-gray-50 border-b border-gray-100">
+                  <th className="px-5 py-3 font-medium">ID</th>
+                  <th className="px-5 py-3 font-medium">Customer</th>
+                  <th className="px-5 py-3 font-medium">Vehicle</th>
+                  <th className="px-5 py-3 font-medium">Description</th>
+                  <th className="px-5 py-3 font-medium">Status</th>
+                  <th className="px-5 py-3 font-medium">Priority</th>
+                  <th className="px-5 py-3 font-medium">Est. Price</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          {filtered.length === 0 && (
-            <div className="text-center py-12 text-gray-400">No jobs match your filter.</div>
-          )}
-        </div>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {jobs.map((job) => (
+                  <tr
+                    key={job.id}
+                    className="hover:bg-gray-50 transition-colors cursor-pointer"
+                    onClick={() => navigate(`/jobs/${job.id}`)}
+                  >
+                    <td className="px-5 py-3 font-mono text-blue-600 font-medium whitespace-nowrap">{job.id.slice(0, 8)}</td>
+                    <td className="px-5 py-3 whitespace-nowrap">
+                      <p className="font-medium text-gray-900">{job.customer?.name}</p>
+                      <p className="text-gray-500 text-xs">{job.customer?.phone}</p>
+                    </td>
+                    <td className="px-5 py-3 whitespace-nowrap text-gray-600">
+                      {job.vehicle ? `${job.vehicle.make} ${job.vehicle.model} (${job.vehicle.plate})` : '—'}
+                    </td>
+                    <td className="px-5 py-3 text-gray-700 max-w-xs truncate">{job.description}</td>
+                    <td className="px-5 py-3">
+                      <span className={`badge ${STATUS_COLORS[job.status?.toLowerCase() as JobStatus]}`}>
+                        {job.status?.toLowerCase().replace(/_/g, ' ')}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3">
+                      <span className={`badge ${PRIORITY_COLORS[job.priority?.toLowerCase() as Priority]}`}>
+                        {job.priority?.toLowerCase()}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 text-gray-700 whitespace-nowrap">
+                      {job.estimated_price ? `€${job.estimated_price}` : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {jobs.length === 0 && (
+              <div className="text-center py-12 text-gray-400">No jobs found.</div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

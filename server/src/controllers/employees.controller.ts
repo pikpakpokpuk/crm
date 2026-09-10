@@ -39,6 +39,15 @@ export class EmployeesController {
       next(err);
     }
   }
+
+  async create(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const employee = await employeesService.create(req.body);
+      res.status(201).json(employee);
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 export default new EmployeesController();

@@ -57,6 +57,24 @@ export class JobsController {
       next(err);
     }
   }
+
+  async getLineItems(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const items = await jobsService.getLineItems(req.params.id as string);
+      res.json(items);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async updateLineItems(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const items = await jobsService.updateLineItems(req.params.id as string, req.body.items ?? []);
+      res.json(items);
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 export default new JobsController();

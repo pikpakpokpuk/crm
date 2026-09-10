@@ -30,7 +30,7 @@ export default function LoginPage() {
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-white">CRM</h1>
           <p className="text-slate-400 mt-2">Sign in to your account</p>
-          <p className="text-slate-500 text-xs mt-1">Demo mode — any email/password works</p>
+          <p className="text-slate-500 text-xs mt-1">admin@crm.local / admin123</p>
         </div>
 
         <div className="card p-8">

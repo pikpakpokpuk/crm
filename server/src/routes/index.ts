@@ -4,6 +4,7 @@ import jobsRoutes from './jobs.routes';
 import customersRoutes from './customers.routes';
 import employeesRoutes from './employees.routes';
 import inventoryRoutes from './inventory.routes';
+import documentRoutes from './document.routes';
 
 const router = Router();
 
@@ -12,5 +13,6 @@ router.use('/jobs', jobsRoutes);
 router.use('/customers', customersRoutes);
 router.use('/employees', employeesRoutes);
 router.use('/inventory', inventoryRoutes);
+router.use('/documents', documentRoutes);
 
 export default router;

@@ -11,9 +11,11 @@ export type Priority = 'low' | 'medium' | 'high' | 'urgent';
 export interface Customer {
   id: string;
   name: string;
-  email: string;
+  email?: string;
   phone: string;
   address?: string;
+  taxNumber?: string;
+  notes?: string;
   created_at: string;
 }
 
@@ -62,6 +64,7 @@ export interface InventoryItem {
   unit: string;
   unit_price: number;
   category?: string;
+  notes?: string;
 }
 
 export interface User {

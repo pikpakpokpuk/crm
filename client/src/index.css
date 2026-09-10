@@ -47,7 +47,7 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.5rem 1rem;
-    border-radius: 0.5rem;
+    border-radius: 9999px;
     font-size: 0.875rem;
     font-weight: 500;
     transition: background-color 0.15s;
@@ -60,11 +60,11 @@
     cursor: not-allowed;
   }
   .btn-primary {
-    background-color: #2563eb;
+    background-color: #1e293b;
     color: #fff;
   }
   .btn-primary:hover:not(:disabled) {
-    background-color: #1d4ed8;
+    background-color: #0f172a;
   }
   .btn-secondary {
     background-color: #fff;

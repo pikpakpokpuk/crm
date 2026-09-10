@@ -25,19 +25,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [token]);
 
   const login = async (email: string, password: string) => {
-    // Demo bypass: any credentials work until backend is ready
-    const demoUser: User = {
-      id: '1',
-      name: 'Admin User',
-      email,
-      role: 'admin',
-    };
-    const demoToken = 'demo-token';
-    localStorage.setItem('token', demoToken);
-    localStorage.setItem('user', JSON.stringify(demoUser));
-    setToken(demoToken);
-    setUser(demoUser);
-    void password; // will be validated by real API later
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    if (!res.ok) throw new Error('Invalid credentials');
+    const data = await res.json();
+    localStorage.setItem('token', data.token);
+    localStorage.setItem('user', JSON.stringify(data.user));
+    setToken(data.token);
+    setUser(data.user);
   };
 
   const logout = () => {

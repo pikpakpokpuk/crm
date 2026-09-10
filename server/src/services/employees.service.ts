@@ -1,4 +1,5 @@
-import { Prisma } from '@prisma/client';
+import bcrypt from 'bcryptjs';
+import { Prisma, UserRole } from '@prisma/client';
 import prisma from '../prisma/client';
 import { AppError } from '../middleware/error.middleware';
 import type { PaginationQuery } from '../types';
@@ -55,6 +56,21 @@ export class EmployeesService {
 
   async setActive(id: string, active: boolean) {
     return this.update(id, { active });
+  }
+
+  async create(data: { name: string; email: string; password: string; role?: string }) {
+    const existing = await prisma.user.findUnique({ where: { email: data.email } });
+    if (existing) throw new AppError(409, 'Email already in use');
+    const passwordHash = await bcrypt.hash(data.password, 12);
+    return prisma.user.create({
+      data: {
+        name: data.name,
+        email: data.email,
+        passwordHash,
+        role: (data.role as UserRole) ?? UserRole.EMPLOYEE,
+      },
+      select: { id: true, name: true, email: true, role: true, active: true, createdAt: true },
+    });
   }
 }
 
