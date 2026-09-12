@@ -32,7 +32,7 @@ export class JobsController {
 
   async update(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const job = await jobsService.update(req.params.id as string, req.body);
+      const job = await jobsService.update(req.params.id as string, req.body, req.user?.id);
       res.json(job);
     } catch (err) {
       next(err);
@@ -69,8 +69,18 @@ export class JobsController {
 
   async updateLineItems(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const items = await jobsService.updateLineItems(req.params.id as string, req.body.items ?? []);
+      const items = await jobsService.updateLineItems(req.params.id as string, req.body.items ?? [], req.user?.id);
       res.json(items);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async getActivity(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const { getActivityLog } = await import('../services/activity.service');
+      const logs = await getActivityLog(req.params.id as string);
+      res.json(logs);
     } catch (err) {
       next(err);
     }

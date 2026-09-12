@@ -95,7 +95,7 @@ export default function DashboardPage() {
                     <td className="px-5 py-3 font-mono text-blue-600 font-medium">{job.id.slice(0, 8)}</td>
                     <td className="px-5 py-3 text-gray-900">{job.customer?.name ?? '—'}</td>
                     <td className="px-5 py-3 text-gray-600">
-                      {job.vehicle ? `${job.vehicle.make} ${job.vehicle.model}` : '—'}
+                      {job.vehicleMake ? `${job.vehicleMake} ${job.vehicleModel ?? ''}`.trim() : '—'}
                     </td>
                     <td className="px-5 py-3">
                       <span className={`badge ${STATUS_COLORS[norm(job.status)]}`}>

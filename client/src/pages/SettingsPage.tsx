@@ -1,3 +1,70 @@
+import { useState, useEffect } from 'react';
+import { api } from '@/lib/api';
+
+type WAStatus = 'initializing' | 'qr' | 'connected' | 'disconnected';
+
+function WhatsAppSection() {
+  const [status, setStatus] = useState<WAStatus>('initializing');
+  const [qr, setQr] = useState<string | null>(null);
+  const [disconnecting, setDisconnecting] = useState(false);
+
+  useEffect(() => {
+    const poll = () => {
+      api.get<{ status: string; qr?: string }>('/whatsapp/status')
+        .then((r) => {
+          setStatus(r.status as WAStatus);
+          setQr(r.qr ?? null);
+        }).catch(console.error);
+    };
+    poll();
+    const iv = setInterval(poll, 4000);
+    return () => clearInterval(iv);
+  }, []);
+
+  const disconnect = async () => {
+    setDisconnecting(true);
+    try { await api.delete('/whatsapp/session'); }
+    catch (err) { console.error(err); }
+    finally { setDisconnecting(false); }
+  };
+
+  return (
+    <div className="card p-5">
+      <h3 className="font-semibold text-gray-900 mb-1">WhatsApp</h3>
+      <p className="text-gray-500 text-sm mb-4">Connect a WhatsApp account to chat with customers from job pages.</p>
+      <div className="flex items-center gap-3 mb-4">
+        <span className={`badge ${
+          status === 'connected' ? 'bg-green-100 text-green-700' :
+          status === 'qr' ? 'bg-yellow-100 text-yellow-700' :
+          'bg-gray-100 text-gray-500'
+        }`}>
+          {status === 'connected' ? '● Connected' : status === 'qr' ? 'Waiting for scan' : status}
+        </span>
+        {status === 'connected' && (
+          <button className="btn btn-secondary text-sm" onClick={disconnect} disabled={disconnecting}>
+            {disconnecting ? 'Disconnecting…' : 'Disconnect'}
+          </button>
+        )}
+      </div>
+      {status === 'qr' && qr && (
+        <div className="flex flex-col items-center gap-2 py-2">
+          <img src={qr} alt="WhatsApp QR" className="w-56 h-56 rounded-lg border border-gray-200" />
+          <p className="text-xs text-gray-500">Scan with WhatsApp → Linked Devices → Link a Device</p>
+        </div>
+      )}
+      {status === 'initializing' && (
+        <div className="flex items-center gap-2 text-gray-400 text-sm py-2">
+          <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+          Starting WhatsApp…
+        </div>
+      )}
+      {status === 'disconnected' && (
+        <p className="text-sm text-gray-500">WhatsApp disconnected. Restart the server to reconnect.</p>
+      )}
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   return (
     <div className="p-6 space-y-6">
@@ -51,6 +118,8 @@ export default function SettingsPage() {
           </div>
           <button className="btn-secondary mt-3 text-sm">+ Add Rule</button>
         </div>
+
+        <WhatsAppSection />
 
         {/* Company Info */}
         <div className="card p-5">

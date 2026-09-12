@@ -5,6 +5,7 @@ import customersRoutes from './customers.routes';
 import employeesRoutes from './employees.routes';
 import inventoryRoutes from './inventory.routes';
 import documentRoutes from './document.routes';
+import whatsappRoutes from './whatsapp.routes';
 
 const router = Router();
 
@@ -14,5 +15,6 @@ router.use('/customers', customersRoutes);
 router.use('/employees', employeesRoutes);
 router.use('/inventory', inventoryRoutes);
 router.use('/documents', documentRoutes);
+router.use('/whatsapp', whatsappRoutes);
 
 export default router;

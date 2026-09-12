@@ -19,16 +19,6 @@ export interface Customer {
   created_at: string;
 }
 
-export interface Vehicle {
-  id: string;
-  customer_id: string;
-  make: string;
-  model: string;
-  year: number;
-  plate: string;
-  vin?: string;
-}
-
 export interface Employee {
   id: string;
   name: string;
@@ -43,7 +33,6 @@ export interface Job {
   created_at: string;
   created_by: string;
   customer_id: string;
-  vehicle_id?: string;
   assigned_to?: string;
   description: string;
   damage_type?: string;
@@ -51,8 +40,15 @@ export interface Job {
   estimated_price?: number;
   final_price?: number;
   status: JobStatus;
+  // vehicle fields inline
+  vehicleMake?: string;
+  vehicleModel?: string;
+  vehicleYear?: number;
+  vehiclePlate?: string;
+  vehicleVin?: string;
+  vehicleColor?: string;
+  vehicleMileage?: number;
   customer?: Customer;
-  vehicle?: Vehicle;
   employee?: Employee;
 }
 

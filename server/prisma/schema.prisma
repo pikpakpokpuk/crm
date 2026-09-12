@@ -32,7 +32,6 @@ enum UserRole {
 enum CustomFieldEntity {
   JOB
   CUSTOMER
-  VEHICLE
 }
 
 enum CustomFieldType {
@@ -55,8 +54,9 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  createdJobs  Job[]    @relation("JobCreator")
-  assignedJobs Job[]    @relation("JobAssignee")
+  createdJobs  Job[]            @relation("JobCreator")
+  assignedJobs Job[]            @relation("JobAssignee")
+  activityLogs JobActivityLog[]
 
   @@map("users")
 }
@@ -74,33 +74,10 @@ model Customer {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  vehicles          Vehicle[]
   jobs              Job[]
   customFieldValues CustomFieldValue[]
 
   @@map("customers")
-}
-
-// ─── Vehicles ─────────────────────────────────────────────────────────────────
-
-model Vehicle {
-  id         String   @id @default(uuid())
-  customerId String
-  make       String
-  model      String
-  year       Int
-  plate      String   @unique
-  vin        String?  @unique
-  color      String?
-  mileage    Int?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  customer          Customer           @relation(fields: [customerId], references: [id])
-  jobs              Job[]
-  customFieldValues CustomFieldValue[]
-
-  @@map("vehicles")
 }
 
 // ─── Jobs (central entity) ────────────────────────────────────────────────────
@@ -111,7 +88,6 @@ model Job {
   updatedAt    DateTime  @updatedAt
   createdById  String
   customerId   String
-  vehicleId    String?
   assignedToId String?
 
   description    String
@@ -124,14 +100,24 @@ model Job {
   scheduledAt    DateTime?
   completedAt    DateTime?
 
+  // Vehicle info stored inline — no separate table needed
+  vehicleMake    String? @map("vehicle_make")
+  vehicleModel   String? @map("vehicle_model")
+  vehicleYear    Int?    @map("vehicle_year")
+  vehiclePlate   String? @map("vehicle_plate")
+  vehicleVin     String? @map("vehicle_vin")
+  vehicleColor   String? @map("vehicle_color")
+  vehicleMileage Int?    @map("vehicle_mileage")
+
   createdBy         User               @relation("JobCreator", fields: [createdById], references: [id])
   customer          Customer           @relation(fields: [customerId], references: [id])
-  vehicle           Vehicle?           @relation(fields: [vehicleId], references: [id])
   assignedTo        User?              @relation("JobAssignee", fields: [assignedToId], references: [id])
   statusHistory     JobStatusHistory[]
   lineItems         JobLineItem[]
   inventoryUsage    JobInventoryItem[]
   customFieldValues CustomFieldValue[]
+  activityLogs      JobActivityLog[]
+  whatsappMessages  WhatsAppMessage[]
 
   @@map("jobs")
 }
@@ -226,14 +212,12 @@ model CustomFieldValue {
   value         String?
   jobId         String?
   customerId    String?
-  vehicleId     String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   customField CustomField @relation(fields: [customFieldId], references: [id])
   job         Job?        @relation(fields: [jobId], references: [id])
   customer    Customer?   @relation(fields: [customerId], references: [id])
-  vehicle     Vehicle?    @relation(fields: [vehicleId], references: [id])
 
   @@map("custom_field_values")
 }
@@ -250,6 +234,39 @@ model WorkflowRule {
   createdAt     DateTime  @default(now())
 
   @@map("workflow_rules")
+}
+
+// ─── Activity Log ─────────────────────────────────────────────────────────────
+
+model JobActivityLog {
+  id        String   @id @default(uuid())
+  jobId     String
+  userId    String?
+  action    String
+  details   String?
+  createdAt DateTime @default(now())
+
+  job  Job   @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("job_activity_logs")
+}
+
+// ─── WhatsApp ─────────────────────────────────────────────────────────────────
+
+model WhatsAppMessage {
+  id            String   @id @default(uuid())
+  jobId         String?
+  customerPhone String
+  fromMe        Boolean  @default(false)
+  body          String
+  timestamp     DateTime
+  waMessageId   String?  @unique
+  createdAt     DateTime @default(now())
+
+  job Job? @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  @@map("whatsapp_messages")
 }
 
 // ─── Document Templates ───────────────────────────────────────────────────────

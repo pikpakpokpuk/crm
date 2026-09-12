@@ -254,6 +254,14 @@ export default function InventoryPage() {
                       <div className="flex gap-2">
                         <button className="btn btn-secondary text-xs px-2 py-1" onClick={() => setModal({ type: 'edit', item })}>Edit</button>
                         <button className="btn btn-secondary text-xs px-2 py-1" onClick={() => setModal({ type: 'restock', item })}>Restock</button>
+                        <button
+                          className="btn text-xs px-2 py-1 bg-red-50 text-red-600 hover:bg-red-100 border border-red-200"
+                          onClick={async () => {
+                            if (!window.confirm(`Delete "${item.name}"?`)) return;
+                            try { await api.delete(`/inventory/${item.id}`); onSaved(); }
+                            catch (err: unknown) { alert(err instanceof Error ? err.message : 'Delete failed'); }
+                          }}
+                        >Delete</button>
                       </div>
                     </td>
                   </tr>

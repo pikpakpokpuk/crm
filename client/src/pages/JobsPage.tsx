@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '@/lib/api';
-import type { Job, JobStatus, Priority, Customer, Vehicle } from '@/types';
+import type { Job, JobStatus, Priority, Customer } from '@/types';
 
 const STATUS_COLORS: Record<JobStatus, string> = {
   new: 'bg-gray-100 text-gray-700',
@@ -22,12 +22,10 @@ const PRIORITY_COLORS: Record<Priority, string> = {
 const ALL_STATUSES: JobStatus[] = ['new', 'in_progress', 'waiting_parts', 'ready', 'delivered', 'cancelled'];
 
 interface JobsResponse { jobs: Job[]; total: number; page: number; pages: number; }
-interface CustomerWithVehicles extends Customer { vehicles: Vehicle[]; }
 interface EmployeeOption { id: string; name: string; }
 
 interface NewJobForm {
   customerId: string;
-  vehicleId: string;
   description: string;
   damageType: string;
   priority: string;
@@ -35,36 +33,33 @@ interface NewJobForm {
   scheduledAt: string;
   estimatedPrice: string;
   notes: string;
+  vehicleMake: string;
+  vehicleModel: string;
+  vehicleYear: string;
+  vehiclePlate: string;
+  vehicleColor: string;
 }
 
 const EMPTY_FORM: NewJobForm = {
-  customerId: '', vehicleId: '', description: '', damageType: '',
+  customerId: '', description: '', damageType: '',
   priority: 'MEDIUM', assignedToId: '', scheduledAt: '', estimatedPrice: '', notes: '',
+  vehicleMake: '', vehicleModel: '', vehicleYear: '', vehiclePlate: '', vehicleColor: '',
 };
 
 function NewJobModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const [form, setForm] = useState<NewJobForm>(EMPTY_FORM);
-  const [customers, setCustomers] = useState<CustomerWithVehicles[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    api.get<{ customers: CustomerWithVehicles[] }>('/customers?limit=100').then((r) => setCustomers(r.customers)).catch(console.error);
+    api.get<{ customers: Customer[] }>('/customers?limit=100').then((r) => setCustomers(r.customers)).catch(console.error);
     api.get<{ employees: EmployeeOption[] }>('/employees?limit=100').then((r) => setEmployees(r.employees)).catch(console.error);
   }, []);
 
-  const set = (field: keyof NewJobForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const val = e.target.value;
-    setForm((f) => ({
-      ...f,
-      [field]: val,
-      ...(field === 'customerId' ? { vehicleId: '' } : {}),
-    }));
-  };
-
-  const selectedCustomer = customers.find((c) => c.id === form.customerId);
-  const vehicles = selectedCustomer?.vehicles ?? [];
+  const set = (field: keyof NewJobForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+    setForm((f) => ({ ...f, [field]: e.target.value }));
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,7 +70,6 @@ function NewJobModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
     try {
       await api.post('/jobs', {
         customerId: form.customerId,
-        vehicleId: form.vehicleId || undefined,
         description: form.description.trim(),
         damageType: form.damageType.trim() || undefined,
         priority: form.priority,
@@ -83,6 +77,11 @@ function NewJobModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
         scheduledAt: form.scheduledAt || undefined,
         estimatedPrice: form.estimatedPrice ? parseFloat(form.estimatedPrice) : undefined,
         notes: form.notes.trim() || undefined,
+        vehicleMake: form.vehicleMake.trim() || undefined,
+        vehicleModel: form.vehicleModel.trim() || undefined,
+        vehicleYear: form.vehicleYear ? parseInt(form.vehicleYear) : undefined,
+        vehiclePlate: form.vehiclePlate.trim() || undefined,
+        vehicleColor: form.vehicleColor.trim() || undefined,
       });
       onSaved();
       onClose();
@@ -110,16 +109,6 @@ function NewJobModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
             </select>
           </div>
 
-          {vehicles.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Vehicle</label>
-              <select className="input" value={form.vehicleId} onChange={set('vehicleId')}>
-                <option value="">No vehicle</option>
-                {vehicles.map((v) => <option key={v.id} value={v.id}>{v.make} {v.model} {v.year} — {v.plate}</option>)}
-              </select>
-            </div>
-          )}
-
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Description <span className="text-red-500">*</span></label>
             <textarea className="input resize-none" rows={2} value={form.description} onChange={set('description')} placeholder="What needs to be done..." />
@@ -128,7 +117,7 @@ function NewJobModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
           <div className="flex gap-3">
             <div className="flex-1">
               <label className="block text-sm font-medium text-gray-700 mb-1">Damage Type</label>
-              <input className="input" value={form.damageType} onChange={set('damageType')} placeholder="e.g. scratch, dent..." />
+              <input className="input" value={form.damageType} onChange={set('damageType')} placeholder="e.g. Glass, Windowfilm..." />
             </div>
             <div className="flex-1">
               <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
@@ -138,6 +127,35 @@ function NewJobModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
                 <option value="HIGH">High</option>
                 <option value="URGENT">Urgent</option>
               </select>
+            </div>
+          </div>
+
+          {/* Vehicle */}
+          <div className="border border-gray-200 rounded-lg p-3 space-y-3">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Vehicle</p>
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <label className="block text-xs text-gray-600 mb-1">Make</label>
+                <input className="input" value={form.vehicleMake} onChange={set('vehicleMake')} placeholder="BMW" />
+              </div>
+              <div className="flex-1">
+                <label className="block text-xs text-gray-600 mb-1">Model</label>
+                <input className="input" value={form.vehicleModel} onChange={set('vehicleModel')} placeholder="320d" />
+              </div>
+              <div className="w-20">
+                <label className="block text-xs text-gray-600 mb-1">Year</label>
+                <input className="input" type="number" min="1990" max="2030" value={form.vehicleYear} onChange={set('vehicleYear')} placeholder="2022" />
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <label className="block text-xs text-gray-600 mb-1">Plate</label>
+                <input className="input" value={form.vehiclePlate} onChange={set('vehiclePlate')} placeholder="ABC-123" />
+              </div>
+              <div className="flex-1">
+                <label className="block text-xs text-gray-600 mb-1">Color</label>
+                <input className="input" value={form.vehicleColor} onChange={set('vehicleColor')} placeholder="White" />
+              </div>
             </div>
           </div>
 
@@ -270,7 +288,7 @@ export default function JobsPage() {
                       <p className="text-gray-500 text-xs">{job.customer?.phone}</p>
                     </td>
                     <td className="px-5 py-3 whitespace-nowrap text-gray-600">
-                      {job.vehicle ? `${job.vehicle.make} ${job.vehicle.model} (${job.vehicle.plate})` : '—'}
+                      {job.vehicleMake ? `${job.vehicleMake} ${job.vehicleModel ?? ''} ${job.vehiclePlate ? `(${job.vehiclePlate})` : ''}`.trim() : '—'}
                     </td>
                     <td className="px-5 py-3 text-gray-700 max-w-xs truncate">{job.description}</td>
                     <td className="px-5 py-3">

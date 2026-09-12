@@ -1,11 +1,11 @@
 import { JobStatus, Priority, Prisma } from '@prisma/client';
 import prisma from '../prisma/client';
 import { AppError } from '../middleware/error.middleware';
+import { logActivity } from './activity.service';
 import type { JobsQuery } from '../types';
 
 const JOB_INCLUDE = {
   customer: true,
-  vehicle: true,
   assignedTo: { select: { id: true, name: true, email: true } },
   createdBy: { select: { id: true, name: true } },
   lineItems: { orderBy: { sortOrder: 'asc' as const } },
@@ -26,7 +26,7 @@ export class JobsService {
       where.OR = [
         { description: { contains: query.search, mode: 'insensitive' } },
         { customer: { name: { contains: query.search, mode: 'insensitive' } } },
-        { vehicle: { plate: { contains: query.search, mode: 'insensitive' } } },
+        { vehiclePlate: { contains: query.search, mode: 'insensitive' } },
       ];
     }
 
@@ -54,16 +54,21 @@ export class JobsService {
       completedAt: data.completedAt ? new Date(data.completedAt as string) : undefined,
       estimatedPrice: data.estimatedPrice != null && data.estimatedPrice !== '' ? new Prisma.Decimal(String(data.estimatedPrice)) : null,
       finalPrice: data.finalPrice != null && data.finalPrice !== '' ? new Prisma.Decimal(String(data.finalPrice)) : null,
+      vehicleYear: data.vehicleYear != null && data.vehicleYear !== '' ? parseInt(String(data.vehicleYear)) : null,
     };
   }
 
   async create(data: Record<string, unknown>) {
-    return prisma.job.create({ data: this.sanitize(data) as Prisma.JobUncheckedCreateInput, include: JOB_INCLUDE });
+    const job = await prisma.job.create({ data: this.sanitize(data) as Prisma.JobUncheckedCreateInput, include: JOB_INCLUDE });
+    await logActivity(job.id, (data.createdById as string) ?? null, 'JOB_CREATED', 'Job created');
+    return job;
   }
 
-  async update(id: string, data: Record<string, unknown>) {
+  async update(id: string, data: Record<string, unknown>, userId?: string) {
     await this.findById(id);
-    return prisma.job.update({ where: { id }, data: this.sanitize(data) as Prisma.JobUncheckedUpdateInput, include: JOB_INCLUDE });
+    const job = await prisma.job.update({ where: { id }, data: this.sanitize(data) as Prisma.JobUncheckedUpdateInput, include: JOB_INCLUDE });
+    await logActivity(id, userId ?? null, 'JOB_UPDATED', 'Job details updated');
+    return job;
   }
 
   async updateStatus(id: string, status: JobStatus, userId: string, note?: string) {
@@ -71,14 +76,13 @@ export class JobsService {
     const [job] = await prisma.$transaction([
       prisma.job.update({
         where: { id },
-        data: {
-          status,
-          completedAt: status === 'DELIVERED' ? new Date() : undefined,
-        },
+        data: { status, completedAt: status === 'DELIVERED' ? new Date() : undefined },
         include: JOB_INCLUDE,
       }),
       prisma.jobStatusHistory.create({ data: { jobId: id, status, changedBy: userId, note } }),
     ]);
+    const label = status.toLowerCase().replace(/_/g, ' ');
+    await logActivity(id, userId, 'STATUS_CHANGED', `Status changed to "${label}"`);
     return job;
   }
 
@@ -92,24 +96,27 @@ export class JobsService {
     return prisma.jobLineItem.findMany({ where: { jobId }, orderBy: { sortOrder: 'asc' } });
   }
 
-  async updateLineItems(jobId: string, items: Array<{ name: string; type: string; qty: number; unit: string; unitPrice: number; vatPct: number }>) {
+  async updateLineItems(jobId: string, items: Array<{ name: string; type: string; qty: number; unit: string; unitPrice: number; vatPct: number }>, userId?: string) {
     await this.findById(jobId);
-    await prisma.jobLineItem.deleteMany({ where: { jobId } });
-    if (items.length > 0) {
-      await prisma.jobLineItem.createMany({
-        data: items.map((item, i) => ({
-          jobId,
-          sortOrder: i,
-          name: item.name,
-          type: item.type || 'service',
-          qty: new Prisma.Decimal(String(item.qty ?? 1)),
-          unit: item.unit || 'hr',
-          unitPrice: new Prisma.Decimal(String(item.unitPrice ?? 0)),
-          vatPct: new Prisma.Decimal(String(item.vatPct ?? 27)),
-        })),
-      });
-    }
-    return prisma.jobLineItem.findMany({ where: { jobId }, orderBy: { sortOrder: 'asc' } });
+    await logActivity(jobId, userId ?? null, 'LINE_ITEMS_UPDATED', `Products & Services updated (${items.length} rows)`);
+    return prisma.$transaction(async (tx) => {
+      await tx.jobLineItem.deleteMany({ where: { jobId } });
+      if (items.length > 0) {
+        await tx.jobLineItem.createMany({
+          data: items.map((item, i) => ({
+            jobId,
+            sortOrder: i,
+            name: item.name,
+            type: item.type || 'service',
+            qty: new Prisma.Decimal(String(item.qty ?? 1)),
+            unit: item.unit || 'hr',
+            unitPrice: new Prisma.Decimal(String(item.unitPrice ?? 0)),
+            vatPct: new Prisma.Decimal(String(item.vatPct ?? 27)),
+          })),
+        });
+      }
+      return tx.jobLineItem.findMany({ where: { jobId }, orderBy: { sortOrder: 'asc' } });
+    });
   }
 }
 

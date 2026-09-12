@@ -162,6 +162,14 @@ export default function CustomersPage() {
                     <td className="px-5 py-3">
                       <div className="flex gap-2">
                         <button className="btn btn-secondary text-xs px-2 py-1" onClick={() => setModal({ type: 'edit', customer: c })}>Edit</button>
+                        <button
+                          className="btn text-xs px-2 py-1 bg-red-50 text-red-600 hover:bg-red-100 border border-red-200"
+                          onClick={async () => {
+                            if (!window.confirm(`Delete customer "${c.name}"? This cannot be undone.`)) return;
+                            try { await api.delete(`/customers/${c.id}`); loadCustomers(); }
+                            catch (err: unknown) { alert(err instanceof Error ? err.message : 'Delete failed — customer may have associated jobs'); }
+                          }}
+                        >Delete</button>
                       </div>
                     </td>
                   </tr>

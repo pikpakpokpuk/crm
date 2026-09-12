@@ -19,7 +19,7 @@ export class CustomersService {
     }
 
     const [customers, total] = await prisma.$transaction([
-      prisma.customer.findMany({ where, skip, take: limit, orderBy: { name: 'asc' }, include: { vehicles: true, _count: { select: { jobs: true } } } }),
+      prisma.customer.findMany({ where, skip, take: limit, orderBy: { name: 'asc' }, include: { _count: { select: { jobs: true } } } }),
       prisma.customer.count({ where }),
     ]);
 
@@ -29,7 +29,7 @@ export class CustomersService {
   async findById(id: string) {
     const customer = await prisma.customer.findUnique({
       where: { id },
-      include: { vehicles: true, jobs: { orderBy: { createdAt: 'desc' }, take: 10 } },
+      include: { jobs: { orderBy: { createdAt: 'desc' }, take: 10 } },
     });
     if (!customer) throw new AppError(404, 'Customer not found');
     return customer;

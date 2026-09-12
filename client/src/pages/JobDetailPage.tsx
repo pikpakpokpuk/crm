@@ -1,9 +1,17 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '@/lib/api';
 import type { JobStatus, Priority } from '@/types';
 
 // API returns camelCase with uppercase enums
+interface StatusHistoryEntry {
+  id: string;
+  status: string;
+  changedAt: string;
+  changedBy: string | null;
+  note: string | null;
+}
+
 interface JobDetail {
   id: string;
   createdAt: string;
@@ -24,17 +32,31 @@ interface JobDetail {
     address: string | null;
     taxNumber: string | null;
   };
-  vehicle: {
-    id: string;
-    make: string;
-    model: string;
-    year: number;
-    plate: string;
-    vin: string | null;
-    color: string | null;
-    mileage: number | null;
-  } | null;
   assignedTo: { id: string; name: string; email: string } | null;
+  statusHistory: StatusHistoryEntry[];
+  vehicleMake: string | null;
+  vehicleModel: string | null;
+  vehicleYear: number | null;
+  vehiclePlate: string | null;
+  vehicleVin: string | null;
+  vehicleColor: string | null;
+  vehicleMileage: number | null;
+}
+
+interface ActivityEntry {
+  id: string;
+  action: string;
+  details: string | null;
+  createdAt: string;
+  user: { id: string; name: string } | null;
+}
+
+interface WAMessage {
+  id: string;
+  fromMe: boolean;
+  body: string;
+  timestamp: string;
+  customerPhone: string;
 }
 
 interface LineItem {
@@ -92,6 +114,18 @@ export default function JobDetailPage() {
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [generating, setGenerating] = useState(false);
+  const [activeTab, setActiveTab] = useState<'overview' | 'log' | 'whatsapp'>('overview');
+
+  // log tab
+  const [activityLog, setActivityLog] = useState<ActivityEntry[]>([]);
+  const [logLoading, setLogLoading] = useState(false);
+
+  // whatsapp tab
+  const [waMessages, setWaMessages] = useState<WAMessage[]>([]);
+  const [waStatus, setWaStatus] = useState<'initializing' | 'qr' | 'connected' | 'disconnected'>('initializing');
+  const [waInput, setWaInput] = useState('');
+  const [waSending, setWaSending] = useState(false);
+  const waChatRef = useRef<HTMLDivElement>(null);
 
   // form state
   const [status, setStatus] = useState<JobStatus>('new');
@@ -105,6 +139,14 @@ export default function JobDetailPage() {
   const [notes, setNotes] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState('');
   const [items, setItems] = useState<LineItem[]>([]);
+  // vehicle form state
+  const [vehicleMake, setVehicleMake] = useState('');
+  const [vehicleModel, setVehicleModel] = useState('');
+  const [vehicleYear, setVehicleYear] = useState('');
+  const [vehiclePlate, setVehiclePlate] = useState('');
+  const [vehicleVin, setVehicleVin] = useState('');
+  const [vehicleColor, setVehicleColor] = useState('');
+  const [vehicleMileage, setVehicleMileage] = useState('');
 
   const loadJob = useCallback(async () => {
     if (!id) return;
@@ -122,6 +164,13 @@ export default function JobDetailPage() {
       setScheduledAt(j.scheduledAt ? j.scheduledAt.slice(0, 10) : '');
       setEstimatedPrice(j.estimatedPrice ? String(j.estimatedPrice) : '');
       setNotes(j.notes ?? '');
+      setVehicleMake(j.vehicleMake ?? '');
+      setVehicleModel(j.vehicleModel ?? '');
+      setVehicleYear(j.vehicleYear ? String(j.vehicleYear) : '');
+      setVehiclePlate(j.vehiclePlate ?? '');
+      setVehicleVin(j.vehicleVin ?? '');
+      setVehicleColor(j.vehicleColor ?? '');
+      setVehicleMileage(j.vehicleMileage ? String(j.vehicleMileage) : '');
 
       // load line items separately (also returned in job body but use dedicated endpoint)
       const lineItems = await api.get<LineItem[]>(`/jobs/${id}/items`);
@@ -147,6 +196,46 @@ export default function JobDetailPage() {
     }).catch(console.error);
   }, [loadJob]);
 
+  // Load activity log when tab is opened
+  useEffect(() => {
+    if (activeTab !== 'log' || !id) return;
+    setLogLoading(true);
+    api.get<ActivityEntry[]>(`/jobs/${id}/activity`)
+      .then(setActivityLog).catch(console.error).finally(() => setLogLoading(false));
+  }, [activeTab, id]);
+
+  // WhatsApp: sync history + poll status + messages when tab open
+  useEffect(() => {
+    if (activeTab !== 'whatsapp' || !id || !job) return;
+    const phone = encodeURIComponent(job.customer.phone);
+    // Sync chat history from WA on tab open
+    api.get(`/whatsapp/sync?phone=${phone}`).catch(console.error);
+    const poll = () => {
+      api.get<{ status: string }>('/whatsapp/status').then((r) => setWaStatus(r.status as WAStatus)).catch(console.error);
+      api.get<WAMessage[]>(`/whatsapp/messages?phone=${phone}`)
+        .then((msgs) => {
+          setWaMessages(msgs);
+          setTimeout(() => waChatRef.current?.scrollTo({ top: 99999, behavior: 'smooth' }), 50);
+        }).catch(console.error);
+    };
+    poll();
+    const iv = setInterval(poll, 4000);
+    return () => clearInterval(iv);
+  }, [activeTab, id, job]);
+
+  type WAStatus = 'initializing' | 'qr' | 'connected' | 'disconnected';
+
+  const sendWA = async () => {
+    if (!waInput.trim() || !job || waSending) return;
+    setWaSending(true);
+    try {
+      await api.post('/whatsapp/send', { phone: job.customer.phone, body: waInput.trim(), jobId: id });
+      setWaInput('');
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Send failed');
+    } finally { setWaSending(false); }
+  };
+
   const save = async () => {
     if (!id) return;
     setSaving(true);
@@ -161,6 +250,13 @@ export default function JobDetailPage() {
         scheduledAt: scheduledAt || null,
         estimatedPrice: estimatedPrice ? parseFloat(estimatedPrice) : null,
         notes: notes || null,
+        vehicleMake: vehicleMake || null,
+        vehicleModel: vehicleModel || null,
+        vehicleYear: vehicleYear ? parseInt(vehicleYear) : null,
+        vehiclePlate: vehiclePlate || null,
+        vehicleVin: vehicleVin || null,
+        vehicleColor: vehicleColor || null,
+        vehicleMileage: vehicleMileage ? parseInt(vehicleMileage) : null,
       });
       if (status !== originalStatus) {
         await api.patch(`/jobs/${id}/status`, { status: status.toUpperCase() });
@@ -203,13 +299,13 @@ export default function JobDetailPage() {
         customer_phone: job.customer.phone,
         customer_address: job.customer.address ?? '',
         customer_tax_number: job.customer.taxNumber ?? '',
-        vehicle_make: job.vehicle?.make ?? '',
-        vehicle_model: job.vehicle?.model ?? '',
-        vehicle_year: String(job.vehicle?.year ?? ''),
-        vehicle_plate: job.vehicle?.plate ?? '',
-        vehicle_vin: job.vehicle?.vin ?? '',
-        vehicle_color: job.vehicle?.color ?? '',
-        vehicle_mileage: String(job.vehicle?.mileage ?? ''),
+        vehicle_make: vehicleMake,
+        vehicle_model: vehicleModel,
+        vehicle_year: vehicleYear,
+        vehicle_plate: vehiclePlate,
+        vehicle_vin: vehicleVin,
+        vehicle_color: vehicleColor,
+        vehicle_mileage: vehicleMileage,
         assigned_to: employees.find((e) => e.id === assignedToId)?.name ?? '',
         items: items.map((i) => ({
           item_name: i.name, item_type: i.type,
@@ -315,6 +411,26 @@ export default function JobDetailPage() {
         </div>
       </div>
 
+      {/* Tab Bar */}
+      <div className="border-b border-gray-200">
+        <nav className="-mb-px flex gap-6">
+          {(['overview', 'log', 'whatsapp'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === tab
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {tab === 'overview' ? 'Overview' : tab === 'log' ? 'Activity Log' : 'WhatsApp'}
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      {activeTab === 'overview' && (<>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* LEFT — Customer + Vehicle */}
         <div className="space-y-4">
@@ -331,32 +447,34 @@ export default function JobDetailPage() {
             </div>
           </div>
 
-          {job.vehicle && (
-            <div className="card p-5">
-              <h3 className="font-semibold text-gray-900 mb-4">Vehicle</h3>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                {[
-                  { label: 'Make', value: job.vehicle.make },
-                  { label: 'Model', value: job.vehicle.model },
-                  { label: 'Year', value: String(job.vehicle.year) },
-                  { label: 'Plate', value: job.vehicle.plate },
-                  job.vehicle.color ? { label: 'Color', value: job.vehicle.color } : null,
-                  job.vehicle.mileage ? { label: 'Mileage', value: `${job.vehicle.mileage.toLocaleString()} km` } : null,
-                ].filter(Boolean).map((f) => (
-                  <div key={f!.label}>
-                    <p className="text-xs text-gray-400">{f!.label}</p>
-                    <p className="font-medium text-gray-800">{f!.value}</p>
-                  </div>
-                ))}
-                {job.vehicle.vin && (
-                  <div className="col-span-2">
-                    <p className="text-xs text-gray-400">VIN</p>
-                    <p className="font-mono text-xs text-gray-700">{job.vehicle.vin}</p>
-                  </div>
-                )}
+          <div className="card p-5">
+            <h3 className="font-semibold text-gray-900 mb-4">Vehicle</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Make">
+                <input className="input py-1 text-sm" value={vehicleMake} onChange={(e) => setVehicleMake(e.target.value)} placeholder="BMW" />
+              </Field>
+              <Field label="Model">
+                <input className="input py-1 text-sm" value={vehicleModel} onChange={(e) => setVehicleModel(e.target.value)} placeholder="320d" />
+              </Field>
+              <Field label="Year">
+                <input className="input py-1 text-sm" type="number" min="1990" max="2030" value={vehicleYear} onChange={(e) => setVehicleYear(e.target.value)} placeholder="2022" />
+              </Field>
+              <Field label="Plate">
+                <input className="input py-1 text-sm" value={vehiclePlate} onChange={(e) => setVehiclePlate(e.target.value)} placeholder="ABC-123" />
+              </Field>
+              <Field label="Color">
+                <input className="input py-1 text-sm" value={vehicleColor} onChange={(e) => setVehicleColor(e.target.value)} placeholder="White" />
+              </Field>
+              <Field label="Mileage (km)">
+                <input className="input py-1 text-sm" type="number" min="0" value={vehicleMileage} onChange={(e) => setVehicleMileage(e.target.value)} />
+              </Field>
+              <div className="col-span-2">
+                <Field label="VIN">
+                  <input className="input py-1 text-sm font-mono" value={vehicleVin} onChange={(e) => setVehicleVin(e.target.value)} placeholder="WBA3A5C5XDF123456" />
+                </Field>
               </div>
             </div>
-          )}
+          </div>
         </div>
 
         {/* RIGHT — Job Details */}
@@ -495,6 +613,134 @@ export default function JobDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Status History */}
+      {job.statusHistory && job.statusHistory.length > 0 && (
+        <div className="card p-5">
+          <h3 className="font-semibold text-gray-900 mb-4">Status History</h3>
+          <ol className="relative border-l border-gray-200 ml-2 space-y-4">
+            {job.statusHistory.map((entry) => {
+              const empName = employees.find((e) => e.id === entry.changedBy)?.name ?? entry.changedBy ?? 'System';
+              const label = entry.status.toLowerCase().replace(/_/g, ' ');
+              return (
+                <li key={entry.id} className="ml-5">
+                  <span className="absolute -left-2 mt-1 w-3.5 h-3.5 rounded-full border-2 border-white bg-blue-400" />
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`badge text-xs ${STATUS_COLORS[toLowerStatus(entry.status)] ?? 'bg-gray-100 text-gray-600'}`}>{label}</span>
+                    <span className="text-xs text-gray-400">{new Date(entry.changedAt).toLocaleString()}</span>
+                    <span className="text-xs text-gray-500">by {empName}</span>
+                  </div>
+                  {entry.note && <p className="text-xs text-gray-500 mt-1">{entry.note}</p>}
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+      )}
+      </>)} {/* end overview tab */}
+
+      {/* Activity Log Tab */}
+      {activeTab === 'log' && (
+        <div className="card p-5">
+          <h3 className="font-semibold text-gray-900 mb-5">Activity Log</h3>
+          {logLoading ? (
+            <div className="flex justify-center py-10">
+              <div className="w-6 h-6 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : activityLog.length === 0 ? (
+            <p className="text-gray-400 text-sm text-center py-10">No activity recorded yet.</p>
+          ) : (
+            <ol className="relative border-l border-gray-200 ml-2 space-y-5">
+              {activityLog.map((entry) => {
+                const actionLabel = entry.action.replace(/_/g, ' ');
+                const dotColor =
+                  entry.action === 'STATUS_CHANGED' ? 'bg-blue-500' :
+                  entry.action === 'JOB_CREATED' ? 'bg-green-500' :
+                  entry.action === 'LINE_ITEMS_UPDATED' ? 'bg-purple-500' : 'bg-gray-400';
+                return (
+                  <li key={entry.id} className="ml-5">
+                    <span className={`absolute -left-2 mt-1 w-3.5 h-3.5 rounded-full border-2 border-white ${dotColor}`} />
+                    <p className="text-sm font-medium text-gray-800">{actionLabel}</p>
+                    {entry.details && <p className="text-xs text-gray-500 mt-0.5">{entry.details}</p>}
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {new Date(entry.createdAt).toLocaleString()}{entry.user ? ` · ${entry.user.name}` : ''}
+                    </p>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </div>
+      )}
+
+      {/* WhatsApp Tab */}
+      {activeTab === 'whatsapp' && (
+        <div className="card flex flex-col" style={{ height: '600px' }}>
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+            <div className="flex items-center gap-3">
+              <span className="text-lg">💬</span>
+              <div>
+                <p className="font-semibold text-gray-900 text-sm">{job.customer.name}</p>
+                <p className="text-xs text-gray-400">{job.customer.phone}</p>
+              </div>
+            </div>
+            <span className={`badge text-xs ${
+              waStatus === 'connected' ? 'bg-green-100 text-green-700' :
+              waStatus === 'qr' ? 'bg-yellow-100 text-yellow-700' :
+              'bg-gray-100 text-gray-500'
+            }`}>
+              {waStatus === 'connected' ? '● Connected' : waStatus === 'qr' ? 'Scan QR in Settings' : waStatus}
+            </span>
+          </div>
+
+          {waStatus !== 'connected' ? (
+            <div className="flex-1 flex items-center justify-center text-gray-400 text-sm flex-col gap-2">
+              <span>WhatsApp not connected.</span>
+              <span>Go to Settings → WhatsApp to scan QR code.</span>
+            </div>
+          ) : (
+            <>
+              <div ref={waChatRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+                {waMessages.length === 0 && (
+                  <p className="text-center text-gray-400 text-sm py-8">No messages yet.</p>
+                )}
+                {waMessages.map((msg) => (
+                  <div key={msg.id} className={`flex ${msg.fromMe ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-xs rounded-2xl px-4 py-2 text-sm ${
+                      msg.fromMe
+                        ? 'bg-blue-600 text-white rounded-br-none'
+                        : 'bg-gray-100 text-gray-800 rounded-bl-none'
+                    }`}>
+                      <p>{msg.body}</p>
+                      <p className={`text-xs mt-1 ${msg.fromMe ? 'text-blue-200' : 'text-gray-400'}`}>
+                        {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="px-5 py-4 border-t border-gray-100 flex gap-3">
+                <input
+                  className="input flex-1"
+                  placeholder="Type a message…"
+                  value={waInput}
+                  onChange={(e) => setWaInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendWA(); }}}
+                  disabled={waSending}
+                />
+                <button
+                  className="btn btn-primary shrink-0"
+                  onClick={sendWA}
+                  disabled={waSending || !waInput.trim()}
+                >
+                  {waSending ? '…' : 'Send'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
