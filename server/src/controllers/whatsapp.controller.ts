@@ -5,7 +5,8 @@ import type { AuthRequest } from '../types';
 export class WhatsAppController {
   status(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      res.json({ status: whatsappService.getStatus(), qr: whatsappService.getQR() });
+      const isAdmin = req.user?.role === 'ADMIN';
+      res.json({ status: whatsappService.getStatus(), qr: isAdmin ? whatsappService.getQR() : null });
     } catch (err) { next(err); }
   }
 

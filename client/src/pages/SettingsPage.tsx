@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 type WAStatus = 'initializing' | 'qr' | 'connected' | 'disconnected';
 
 function WhatsAppSection() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   const [status, setStatus] = useState<WAStatus>('initializing');
   const [qr, setQr] = useState<string | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
@@ -31,7 +34,10 @@ function WhatsAppSection() {
   return (
     <div className="card p-5">
       <h3 className="font-semibold text-gray-900 mb-1">WhatsApp</h3>
-      <p className="text-gray-500 text-sm mb-4">Connect a WhatsApp account to chat with customers from job pages.</p>
+      <p className="text-gray-500 text-sm mb-4">
+        One WhatsApp account is shared across the whole CRM.
+        {!isAdmin && ' Only admins can link or disconnect it.'}
+      </p>
       <div className="flex items-center gap-3 mb-4">
         <span className={`badge ${
           status === 'connected' ? 'bg-green-100 text-green-700' :
@@ -40,26 +46,34 @@ function WhatsAppSection() {
         }`}>
           {status === 'connected' ? '● Connected' : status === 'qr' ? 'Waiting for scan' : status}
         </span>
-        {status === 'connected' && (
+        {isAdmin && status === 'connected' && (
           <button className="btn btn-secondary text-sm" onClick={disconnect} disabled={disconnecting}>
             {disconnecting ? 'Disconnecting…' : 'Disconnect'}
           </button>
         )}
       </div>
-      {status === 'qr' && qr && (
-        <div className="flex flex-col items-center gap-2 py-2">
-          <img src={qr} alt="WhatsApp QR" className="w-56 h-56 rounded-lg border border-gray-200" />
-          <p className="text-xs text-gray-500">Scan with WhatsApp → Linked Devices → Link a Device</p>
-        </div>
-      )}
-      {status === 'initializing' && (
-        <div className="flex items-center gap-2 text-gray-400 text-sm py-2">
-          <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
-          Starting WhatsApp…
-        </div>
-      )}
-      {status === 'disconnected' && (
-        <p className="text-sm text-gray-500">WhatsApp disconnected. Restart the server to reconnect.</p>
+      {!isAdmin ? (
+        status === 'qr' ? (
+          <p className="text-sm text-gray-500">Waiting for an admin to link an account.</p>
+        ) : null
+      ) : (
+        <>
+          {status === 'qr' && qr && (
+            <div className="flex flex-col items-center gap-2 py-2">
+              <img src={qr} alt="WhatsApp QR" className="w-56 h-56 rounded-lg border border-gray-200" />
+              <p className="text-xs text-gray-500">Scan with WhatsApp → Linked Devices → Link a Device</p>
+            </div>
+          )}
+          {status === 'initializing' && (
+            <div className="flex items-center gap-2 text-gray-400 text-sm py-2">
+              <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+              Starting WhatsApp…
+            </div>
+          )}
+          {status === 'disconnected' && (
+            <p className="text-sm text-gray-500">WhatsApp disconnected. Restart the server to reconnect.</p>
+          )}
+        </>
       )}
     </div>
   );
