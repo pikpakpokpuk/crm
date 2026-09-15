@@ -25,7 +25,7 @@ export class EmployeesService {
         skip,
         take: limit,
         orderBy: { name: 'asc' },
-        select: { id: true, name: true, email: true, role: true, active: true, createdAt: true, _count: { select: { assignedJobs: true } } },
+        select: { id: true, name: true, email: true, role: true, active: true, calendarColor: true, createdAt: true, _count: { select: { assignedJobs: true } } },
       }),
       prisma.user.count({ where }),
     ]);
@@ -37,7 +37,7 @@ export class EmployeesService {
     const employee = await prisma.user.findUnique({
       where: { id },
       select: {
-        id: true, name: true, email: true, role: true, active: true, createdAt: true,
+        id: true, name: true, email: true, role: true, active: true, calendarColor: true, createdAt: true,
         assignedJobs: { orderBy: { createdAt: 'desc' }, take: 10, include: { customer: true } },
       },
     });
@@ -50,7 +50,7 @@ export class EmployeesService {
     return prisma.user.update({
       where: { id },
       data,
-      select: { id: true, name: true, email: true, role: true, active: true },
+      select: { id: true, name: true, email: true, role: true, active: true, calendarColor: true },
     });
   }
 

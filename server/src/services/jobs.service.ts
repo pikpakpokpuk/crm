@@ -9,6 +9,7 @@ const JOB_INCLUDE = {
   assignedTo: { select: { id: true, name: true, email: true } },
   createdBy: { select: { id: true, name: true } },
   lineItems: { orderBy: { sortOrder: 'asc' as const } },
+  crew: { include: { user: { select: { id: true, name: true, calendarColor: true } } } },
 } satisfies Prisma.JobInclude;
 
 export class JobsService {
@@ -48,9 +49,12 @@ export class JobsService {
   }
 
   private sanitize(data: Record<string, unknown>) {
+    const { crewUserIds: _crewUserIds, ...rest } = data;
     return {
-      ...data,
+      ...rest,
       scheduledAt: data.scheduledAt ? new Date(data.scheduledAt as string) : null,
+      scheduledStart: data.scheduledStart ? new Date(data.scheduledStart as string) : null,
+      scheduledEnd: data.scheduledEnd ? new Date(data.scheduledEnd as string) : null,
       completedAt: data.completedAt ? new Date(data.completedAt as string) : undefined,
       estimatedPrice: data.estimatedPrice != null && data.estimatedPrice !== '' ? new Prisma.Decimal(String(data.estimatedPrice)) : null,
       finalPrice: data.finalPrice != null && data.finalPrice !== '' ? new Prisma.Decimal(String(data.finalPrice)) : null,
@@ -58,17 +62,30 @@ export class JobsService {
     };
   }
 
+  private async syncCrew(jobId: string, crewUserIds?: unknown) {
+    if (!Array.isArray(crewUserIds)) return;
+    const ids = crewUserIds.filter((id): id is string => typeof id === 'string');
+    await prisma.$transaction([
+      prisma.jobEmployee.deleteMany({ where: { jobId } }),
+      ...(ids.length > 0
+        ? [prisma.jobEmployee.createMany({ data: ids.map((userId) => ({ jobId, userId })) })]
+        : []),
+    ]);
+  }
+
   async create(data: Record<string, unknown>) {
     const job = await prisma.job.create({ data: this.sanitize(data) as Prisma.JobUncheckedCreateInput, include: JOB_INCLUDE });
+    await this.syncCrew(job.id, data.crewUserIds);
     await logActivity(job.id, (data.createdById as string) ?? null, 'JOB_CREATED', 'Job created');
-    return job;
+    return this.findById(job.id);
   }
 
   async update(id: string, data: Record<string, unknown>, userId?: string) {
     await this.findById(id);
     const job = await prisma.job.update({ where: { id }, data: this.sanitize(data) as Prisma.JobUncheckedUpdateInput, include: JOB_INCLUDE });
+    if (data.crewUserIds !== undefined) await this.syncCrew(id, data.crewUserIds);
     await logActivity(id, userId ?? null, 'JOB_UPDATED', 'Job details updated');
-    return job;
+    return this.findById(job.id);
   }
 
   async updateStatus(id: string, status: JobStatus, userId: string, note?: string) {

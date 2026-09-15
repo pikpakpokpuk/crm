@@ -54,9 +54,14 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  createdJobs  Job[]            @relation("JobCreator")
-  assignedJobs Job[]            @relation("JobAssignee")
-  activityLogs JobActivityLog[]
+  calendarColor String @default("#3b82f6")
+
+  createdJobs      Job[]            @relation("JobCreator")
+  assignedJobs     Job[]            @relation("JobAssignee")
+  activityLogs     JobActivityLog[]
+  jobsAssigned     JobEmployee[]
+  calendarEvents   CalendarEvent[]  @relation("CalendarEventOwner")
+  createdEvents    CalendarEvent[]  @relation("CalendarEventCreator")
 
   @@map("users")
 }
@@ -98,6 +103,8 @@ model Job {
   finalPrice     Decimal?  @db.Decimal(10, 2)
   notes          String?
   scheduledAt    DateTime?
+  scheduledStart DateTime?
+  scheduledEnd   DateTime?
   completedAt    DateTime?
 
   // Vehicle info stored inline — no separate table needed
@@ -118,8 +125,40 @@ model Job {
   customFieldValues CustomFieldValue[]
   activityLogs      JobActivityLog[]
   whatsappMessages  WhatsAppMessage[]
+  crew              JobEmployee[]
 
   @@map("jobs")
+}
+
+model JobEmployee {
+  id     String   @id @default(uuid())
+  jobId  String
+  userId String
+  hours  Decimal? @db.Decimal(6, 2)
+
+  job  Job  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, userId])
+  @@map("job_employees")
+}
+
+model CalendarEvent {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  startAt     DateTime
+  endAt       DateTime
+  allDay      Boolean  @default(false)
+  userId      String?
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user      User? @relation("CalendarEventOwner", fields: [userId], references: [id], onDelete: SetNull)
+  createdBy User  @relation("CalendarEventCreator", fields: [createdById], references: [id])
+
+  @@map("calendar_events")
 }
 
 model JobStatusHistory {

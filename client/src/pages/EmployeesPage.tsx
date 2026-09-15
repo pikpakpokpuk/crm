@@ -7,6 +7,7 @@ interface Employee {
   email: string;
   role: string;
   active: boolean;
+  calendarColor: string;
   createdAt: string;
   _count?: { assignedJobs: number };
 }
@@ -14,7 +15,7 @@ interface Employee {
 interface EmployeesResponse { employees: Employee[]; total: number; }
 
 interface NewEmployeeForm { name: string; email: string; password: string; role: string; }
-interface EditEmployeeForm { name: string; email: string; role: string; }
+interface EditEmployeeForm { name: string; email: string; role: string; calendarColor: string; }
 
 const EMPTY_NEW: NewEmployeeForm = { name: '', email: '', password: '', role: 'EMPLOYEE' };
 
@@ -80,7 +81,7 @@ function NewEmployeeModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
 }
 
 function EditEmployeeModal({ employee, onClose, onSaved }: { employee: Employee; onClose: () => void; onSaved: () => void }) {
-  const [form, setForm] = useState<EditEmployeeForm>({ name: employee.name, email: employee.email, role: employee.role });
+  const [form, setForm] = useState<EditEmployeeForm>({ name: employee.name, email: employee.email, role: employee.role, calendarColor: employee.calendarColor ?? '#3b82f6' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -94,7 +95,7 @@ function EditEmployeeModal({ employee, onClose, onSaved }: { employee: Employee;
     setError('');
     setSaving(true);
     try {
-      await api.put(`/employees/${employee.id}`, { name: form.name.trim(), email: form.email.trim(), role: form.role });
+      await api.put(`/employees/${employee.id}`, { name: form.name.trim(), email: form.email.trim(), role: form.role, calendarColor: form.calendarColor });
       onSaved(); onClose();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to save');
@@ -123,6 +124,10 @@ function EditEmployeeModal({ employee, onClose, onSaved }: { employee: Employee;
               <option value="EMPLOYEE">Employee</option>
               <option value="ADMIN">Admin</option>
             </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Calendar Color</label>
+            <input type="color" className="h-9 w-16 rounded border border-gray-200 cursor-pointer" value={form.calendarColor} onChange={set('calendarColor')} />
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
           <div className="flex justify-end gap-2 pt-1">
@@ -185,7 +190,10 @@ export default function EmployeesPage() {
                     {emp.name.split(' ').map((n) => n[0]).join('').slice(0, 2)}
                   </div>
                   <div>
-                    <p className="font-semibold text-gray-900">{emp.name}</p>
+                    <p className="font-semibold text-gray-900 flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: emp.calendarColor }} />
+                      {emp.name}
+                    </p>
                     <p className="text-gray-500 text-sm">{emp.role}</p>
                   </div>
                 </div>

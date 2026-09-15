@@ -33,6 +33,9 @@ interface JobDetail {
     taxNumber: string | null;
   };
   assignedTo: { id: string; name: string; email: string } | null;
+  scheduledStart: string | null;
+  scheduledEnd: string | null;
+  crew: { user: { id: string; name: string; calendarColor: string } }[];
   statusHistory: StatusHistoryEntry[];
   vehicleMake: string | null;
   vehicleModel: string | null;
@@ -70,7 +73,7 @@ interface LineItem {
 }
 
 interface Template { id: string; name: string; }
-interface EmployeeOption { id: string; name: string; }
+interface EmployeeOption { id: string; name: string; calendarColor?: string; }
 
 const STATUS_COLORS: Record<JobStatus, string> = {
   new: 'bg-gray-100 text-gray-700',
@@ -93,6 +96,13 @@ const ALL_PRIORITIES: Priority[] = ['low', 'medium', 'high', 'urgent'];
 
 function toLowerStatus(s: string): JobStatus { return s.toLowerCase().replace(/ /g, '_') as JobStatus; }
 function toLowerPriority(p: string): Priority { return p.toLowerCase() as Priority; }
+
+function toDatetimeLocal(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -135,6 +145,9 @@ export default function JobDetailPage() {
   const [damageType, setDamageType] = useState('');
   const [assignedToId, setAssignedToId] = useState('');
   const [scheduledAt, setScheduledAt] = useState('');
+  const [scheduledStart, setScheduledStart] = useState('');
+  const [scheduledEnd, setScheduledEnd] = useState('');
+  const [crewUserIds, setCrewUserIds] = useState<string[]>([]);
   const [estimatedPrice, setEstimatedPrice] = useState('');
   const [notes, setNotes] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState('');
@@ -162,6 +175,9 @@ export default function JobDetailPage() {
       setDamageType(j.damageType ?? '');
       setAssignedToId(j.assignedToId ?? '');
       setScheduledAt(j.scheduledAt ? j.scheduledAt.slice(0, 10) : '');
+      setScheduledStart(toDatetimeLocal(j.scheduledStart));
+      setScheduledEnd(toDatetimeLocal(j.scheduledEnd));
+      setCrewUserIds(j.crew?.map((c) => c.user.id) ?? []);
       setEstimatedPrice(j.estimatedPrice ? String(j.estimatedPrice) : '');
       setNotes(j.notes ?? '');
       setVehicleMake(j.vehicleMake ?? '');
@@ -248,6 +264,9 @@ export default function JobDetailPage() {
         status: status.toUpperCase(),
         assignedToId: assignedToId || null,
         scheduledAt: scheduledAt || null,
+        scheduledStart: scheduledStart ? new Date(scheduledStart).toISOString() : null,
+        scheduledEnd: scheduledEnd ? new Date(scheduledEnd).toISOString() : null,
+        crewUserIds,
         estimatedPrice: estimatedPrice ? parseFloat(estimatedPrice) : null,
         notes: notes || null,
         vehicleMake: vehicleMake || null,
@@ -502,9 +521,34 @@ export default function JobDetailPage() {
               </select>
             </Field>
 
-            <Field label="Scheduled Date">
-              <input type="date" className="input" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} />
+            <Field label="Scheduled Start">
+              <input type="datetime-local" className="input" value={scheduledStart} onChange={(e) => setScheduledStart(e.target.value)} />
             </Field>
+
+            <Field label="Scheduled End">
+              <input type="datetime-local" className="input" value={scheduledEnd} onChange={(e) => setScheduledEnd(e.target.value)} />
+            </Field>
+
+            <div className="sm:col-span-2">
+              <Field label="Crew (shows on Calendar)">
+                <div className="flex flex-wrap gap-3 pt-1">
+                  {employees.map((emp) => (
+                    <label key={emp.id} className="flex items-center gap-1.5 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={crewUserIds.includes(emp.id)}
+                        onChange={(e) => setCrewUserIds((prev) =>
+                          e.target.checked ? [...prev, emp.id] : prev.filter((id) => id !== emp.id)
+                        )}
+                      />
+                      <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: emp.calendarColor ?? '#9ca3af' }} />
+                      {emp.name}
+                    </label>
+                  ))}
+                  {employees.length === 0 && <span className="text-xs text-gray-400">No employees yet.</span>}
+                </div>
+              </Field>
+            </div>
 
             <Field label="Estimated Price (€)">
               <input type="number" step="0.01" className="input" value={estimatedPrice} onChange={(e) => setEstimatedPrice(e.target.value)} />
