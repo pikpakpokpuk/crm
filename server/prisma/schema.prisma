@@ -311,6 +311,17 @@ model WhatsAppMessage {
   @@map("whatsapp_messages")
 }
 
+// ─── Integrations ─────────────────────────────────────────────────────────────
+
+model IntegrationSettings {
+  id                 String   @id @default("google_sheets")
+  sheetId            String?
+  serviceAccountJson String?
+  updatedAt          DateTime @updatedAt
+
+  @@map("integration_settings")
+}
+
 // ─── Document Templates ───────────────────────────────────────────────────────
 
 model DocumentTemplate {

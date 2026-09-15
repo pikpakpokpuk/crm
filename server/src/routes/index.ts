@@ -8,6 +8,7 @@ import documentRoutes from './document.routes';
 import whatsappRoutes from './whatsapp.routes';
 import calendarRoutes from './calendar.routes';
 import statsRoutes from './stats.routes';
+import sheetsRoutes from './sheets.routes';
 
 const router = Router();
 
@@ -20,5 +21,6 @@ router.use('/documents', documentRoutes);
 router.use('/whatsapp', whatsappRoutes);
 router.use('/calendar', calendarRoutes);
 router.use('/stats', statsRoutes);
+router.use('/integrations/google-sheets', sheetsRoutes);
 
 export default router;

@@ -79,6 +79,146 @@ function WhatsAppSection() {
   );
 }
 
+interface SheetsConfig { connected: boolean; sheetId: string | null }
+type SheetsEntity = 'jobs' | 'employees' | 'customers' | 'inventory';
+const SHEETS_ENTITIES: { key: SheetsEntity; label: string }[] = [
+  { key: 'jobs', label: 'Jobs' },
+  { key: 'employees', label: 'Employees' },
+  { key: 'customers', label: 'Customers' },
+  { key: 'inventory', label: 'Inventory' },
+];
+
+function GoogleSheetsSection() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
+  const [config, setConfig] = useState<SheetsConfig | null>(null);
+  const [sheetId, setSheetId] = useState('');
+  const [json, setJson] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [busy, setBusy] = useState<string | null>(null);
+  const [result, setResult] = useState<{ entity: string; text: string; errors?: { row: number; message: string }[] } | null>(null);
+
+  const load = () => api.get<SheetsConfig>('/integrations/google-sheets/config').then(setConfig).catch(console.error);
+  useEffect(() => { load(); }, []);
+
+  const serviceAccountEmail = (() => {
+    try { return JSON.parse(json).client_email as string | undefined; } catch { return undefined; }
+  })();
+
+  const connect = async () => {
+    setSaving(true);
+    setSaveError('');
+    try {
+      await api.put('/integrations/google-sheets/config', { sheetId: sheetId.trim(), serviceAccountJson: json.trim() });
+      setJson('');
+      load();
+    } catch (err: unknown) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to connect');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const runExport = async (entity: SheetsEntity) => {
+    setBusy(`export-${entity}`);
+    setResult(null);
+    try {
+      const r = await api.post<{ exported: number }>(`/integrations/google-sheets/export/${entity}`, {});
+      setResult({ entity, text: `Exported ${r.exported} rows.` });
+    } catch (err: unknown) {
+      setResult({ entity, text: err instanceof Error ? err.message : 'Export failed' });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const runImport = async (entity: SheetsEntity) => {
+    setBusy(`import-${entity}`);
+    setResult(null);
+    try {
+      const r = await api.post<{ created: number; updated: number; skipped: number; errors: { row: number; message: string }[] }>(`/integrations/google-sheets/import/${entity}`, {});
+      setResult({ entity, text: `${r.created} created, ${r.updated} updated, ${r.skipped} skipped.`, errors: r.errors });
+    } catch (err: unknown) {
+      setResult({ entity, text: err instanceof Error ? err.message : 'Import failed' });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  if (!isAdmin) {
+    return (
+      <div className="card p-5">
+        <h3 className="font-semibold text-gray-900 mb-1">Google Sheets</h3>
+        <p className="text-gray-500 text-sm">
+          {config?.connected ? 'Connected. ' : 'Not connected. '}Only admins can manage this integration.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card p-5">
+      <h3 className="font-semibold text-gray-900 mb-1">Google Sheets</h3>
+      <p className="text-gray-500 text-sm mb-4">Import/export Jobs, Employees, Customers, and Inventory via a shared Google Sheet.</p>
+
+      {!config?.connected ? (
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Sheet ID</label>
+            <input className="input" value={sheetId} onChange={(e) => setSheetId(e.target.value)} placeholder="from the sheet's URL" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Service Account JSON</label>
+            <textarea className="input resize-none font-mono text-xs" rows={5} value={json} onChange={(e) => setJson(e.target.value)} placeholder="paste the service account key JSON here" />
+          </div>
+          {serviceAccountEmail && (
+            <p className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded p-2">
+              Share your sheet with <span className="font-mono">{serviceAccountEmail}</span> as Editor before connecting.
+            </p>
+          )}
+          {saveError && <p className="text-sm text-red-600">{saveError}</p>}
+          <button className="btn btn-primary text-sm" onClick={connect} disabled={saving || !sheetId.trim() || !json.trim()}>
+            {saving ? 'Connecting...' : 'Connect'}
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <span className="badge bg-green-100 text-green-700">● Connected</span>
+            <span className="text-xs text-gray-400 font-mono">{config.sheetId}</span>
+          </div>
+          <div className="space-y-2">
+            {SHEETS_ENTITIES.map((e) => (
+              <div key={e.key} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <span className="text-sm font-medium text-gray-800">{e.label}</span>
+                <div className="flex gap-2">
+                  <button className="btn btn-secondary text-xs px-2 py-1" disabled={!!busy} onClick={() => runExport(e.key)}>
+                    {busy === `export-${e.key}` ? 'Exporting...' : 'Export'}
+                  </button>
+                  <button className="btn btn-secondary text-xs px-2 py-1" disabled={!!busy} onClick={() => runImport(e.key)}>
+                    {busy === `import-${e.key}` ? 'Importing...' : 'Import'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+          {result && (
+            <div className="text-sm bg-gray-50 border border-gray-200 rounded p-3">
+              <p className="font-medium text-gray-800">{SHEETS_ENTITIES.find((e) => e.key === result.entity)?.label}: {result.text}</p>
+              {result.errors && result.errors.length > 0 && (
+                <ul className="mt-2 space-y-1 text-xs text-red-600 max-h-32 overflow-y-auto">
+                  {result.errors.map((e, i) => <li key={i}>Row {e.row}: {e.message}</li>)}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   return (
     <div className="p-6 space-y-6">
@@ -134,6 +274,7 @@ export default function SettingsPage() {
         </div>
 
         <WhatsAppSection />
+        <GoogleSheetsSection />
 
         {/* Company Info */}
         <div className="card p-5">
