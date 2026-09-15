@@ -41,6 +41,7 @@ export class InventoryService {
         quantity: Number(body.quantity) || 0,
         unit: (body.unit as string) || 'piece',
         unitPrice: new Prisma.Decimal(String(body.unitPrice ?? body.unit_price ?? 0)),
+        costPrice: body.costPrice != null && body.costPrice !== '' ? new Prisma.Decimal(String(body.costPrice)) : null,
         sku: (body.sku as string) || null,
         notes: (body.notes as string) || null,
         minStock: body.minStock != null ? Number(body.minStock) : null,
@@ -57,6 +58,7 @@ export class InventoryService {
     if (body.unit !== undefined) data.unit = body.unit as string;
     if (body.unitPrice !== undefined) data.unitPrice = new Prisma.Decimal(String(body.unitPrice));
     if (body.unit_price !== undefined) data.unitPrice = new Prisma.Decimal(String(body.unit_price));
+    if (body.costPrice !== undefined) data.costPrice = body.costPrice === '' || body.costPrice == null ? null : new Prisma.Decimal(String(body.costPrice));
     if (body.sku !== undefined) data.sku = body.sku as string;
     if (body.notes !== undefined) data.notes = body.notes as string;
     if (body.minStock !== undefined) data.minStock = Number(body.minStock);

@@ -7,8 +7,8 @@ interface InventoryResponse { items: InventoryItem[]; total: number; }
 const CATEGORIES = ['Window', 'Windowfilm', 'Other'];
 const UNITS = ['gram', 'piece', 'ml', 'cm²'];
 
-interface FormData { name: string; category: string; quantity: string; unit: string; unit_price: string; notes: string; }
-const EMPTY_FORM: FormData = { name: '', category: '', quantity: '0', unit: 'piece', unit_price: '', notes: '' };
+interface FormData { name: string; category: string; quantity: string; unit: string; unitPrice: string; costPrice: string; notes: string; }
+const EMPTY_FORM: FormData = { name: '', category: '', quantity: '0', unit: 'piece', unitPrice: '', costPrice: '', notes: '' };
 
 function itemToForm(item: InventoryItem): FormData {
   return {
@@ -16,7 +16,8 @@ function itemToForm(item: InventoryItem): FormData {
     category: item.category ?? '',
     quantity: String(item.quantity),
     unit: item.unit,
-    unit_price: String(item.unit_price),
+    unitPrice: String(item.unitPrice),
+    costPrice: item.costPrice != null ? String(item.costPrice) : '',
     notes: item.notes ?? '',
   };
 }
@@ -40,7 +41,7 @@ function ItemModal({
     e.preventDefault();
     if (!form.name.trim()) { setError('Name is required'); return; }
     if (!form.category) { setError('Category is required'); return; }
-    if (!form.unit_price || isNaN(Number(form.unit_price))) { setError('Unit price must be a number'); return; }
+    if (!form.unitPrice || isNaN(Number(form.unitPrice))) { setError('Unit price must be a number'); return; }
     setError('');
     setSaving(true);
     try {
@@ -49,7 +50,8 @@ function ItemModal({
         category: form.category,
         quantity: parseInt(form.quantity) || 0,
         unit: form.unit,
-        unitPrice: parseFloat(form.unit_price),
+        unitPrice: parseFloat(form.unitPrice),
+        costPrice: form.costPrice ? parseFloat(form.costPrice) : null,
         notes: form.notes.trim() || undefined,
       };
       if (mode === 'add') {
@@ -97,9 +99,15 @@ function ItemModal({
               </select>
             </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Unit Price <span className="text-red-500">*</span></label>
-            <input className="input" type="number" step="0.01" min="0" value={form.unit_price} onChange={set('unit_price')} placeholder="0.00" />
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Sell Price <span className="text-red-500">*</span></label>
+              <input className="input" type="number" step="0.01" min="0" value={form.unitPrice} onChange={set('unitPrice')} placeholder="0.00" />
+            </div>
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Cost Price</label>
+              <input className="input" type="number" step="0.01" min="0" value={form.costPrice} onChange={set('costPrice')} placeholder="what we paid" />
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
@@ -236,7 +244,8 @@ export default function InventoryPage() {
                   <th className="px-5 py-3 font-medium">SKU</th>
                   <th className="px-5 py-3 font-medium">Category</th>
                   <th className="px-5 py-3 font-medium">Qty</th>
-                  <th className="px-5 py-3 font-medium">Unit Price</th>
+                  <th className="px-5 py-3 font-medium">Sell Price</th>
+                  <th className="px-5 py-3 font-medium">Cost Price</th>
                   <th className="px-5 py-3 font-medium">Actions</th>
                 </tr>
               </thead>
@@ -249,7 +258,8 @@ export default function InventoryPage() {
                       {item.category && <span className="badge bg-gray-100 text-gray-600">{item.category}</span>}
                     </td>
                     <td className="px-5 py-3 font-semibold text-gray-900">{item.quantity} {item.unit}</td>
-                    <td className="px-5 py-3 text-gray-700">€{Number(item.unit_price).toFixed(2)}</td>
+                    <td className="px-5 py-3 text-gray-700">€{Number(item.unitPrice).toFixed(2)}</td>
+                    <td className="px-5 py-3 text-gray-500">{item.costPrice != null ? `€${Number(item.costPrice).toFixed(2)}` : '—'}</td>
                     <td className="px-5 py-3">
                       <div className="flex gap-2">
                         <button className="btn btn-secondary text-xs px-2 py-1" onClick={() => setModal({ type: 'edit', item })}>Edit</button>

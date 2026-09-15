@@ -54,7 +54,8 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  calendarColor String @default("#3b82f6")
+  calendarColor String   @default("#3b82f6")
+  hourlyRate    Decimal? @db.Decimal(8, 2)
 
   createdJobs      Job[]            @relation("JobCreator")
   assignedJobs     Job[]            @relation("JobAssignee")
@@ -184,6 +185,7 @@ model InventoryItem {
   quantity  Int      @default(0)
   unit      String   @default("piece")
   unitPrice Decimal  @db.Decimal(10, 2)
+  costPrice Decimal? @db.Decimal(10, 2)
   minStock  Int?
   notes     String?
   createdAt DateTime @default(now())
@@ -204,6 +206,7 @@ model JobLineItem {
   unit      String   @default("hr")
   unitPrice Decimal  @db.Decimal(10, 2)
   vatPct    Decimal  @db.Decimal(5, 2) @default(27)
+  costPrice Decimal? @db.Decimal(10, 2)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -58,7 +58,8 @@ export interface InventoryItem {
   sku?: string;
   quantity: number;
   unit: string;
-  unit_price: number;
+  unitPrice: number;
+  costPrice?: number | null;
   category?: string;
   notes?: string;
 }

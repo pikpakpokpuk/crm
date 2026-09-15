@@ -8,6 +8,7 @@ interface Employee {
   role: string;
   active: boolean;
   calendarColor: string;
+  hourlyRate: string | null;
   createdAt: string;
   _count?: { assignedJobs: number };
 }
@@ -15,7 +16,7 @@ interface Employee {
 interface EmployeesResponse { employees: Employee[]; total: number; }
 
 interface NewEmployeeForm { name: string; email: string; password: string; role: string; }
-interface EditEmployeeForm { name: string; email: string; role: string; calendarColor: string; }
+interface EditEmployeeForm { name: string; email: string; role: string; calendarColor: string; hourlyRate: string; }
 
 const EMPTY_NEW: NewEmployeeForm = { name: '', email: '', password: '', role: 'EMPLOYEE' };
 
@@ -81,7 +82,7 @@ function NewEmployeeModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
 }
 
 function EditEmployeeModal({ employee, onClose, onSaved }: { employee: Employee; onClose: () => void; onSaved: () => void }) {
-  const [form, setForm] = useState<EditEmployeeForm>({ name: employee.name, email: employee.email, role: employee.role, calendarColor: employee.calendarColor ?? '#3b82f6' });
+  const [form, setForm] = useState<EditEmployeeForm>({ name: employee.name, email: employee.email, role: employee.role, calendarColor: employee.calendarColor ?? '#3b82f6', hourlyRate: employee.hourlyRate ?? '' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -95,7 +96,7 @@ function EditEmployeeModal({ employee, onClose, onSaved }: { employee: Employee;
     setError('');
     setSaving(true);
     try {
-      await api.put(`/employees/${employee.id}`, { name: form.name.trim(), email: form.email.trim(), role: form.role, calendarColor: form.calendarColor });
+      await api.put(`/employees/${employee.id}`, { name: form.name.trim(), email: form.email.trim(), role: form.role, calendarColor: form.calendarColor, hourlyRate: form.hourlyRate || null });
       onSaved(); onClose();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to save');
@@ -125,9 +126,15 @@ function EditEmployeeModal({ employee, onClose, onSaved }: { employee: Employee;
               <option value="ADMIN">Admin</option>
             </select>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Calendar Color</label>
-            <input type="color" className="h-9 w-16 rounded border border-gray-200 cursor-pointer" value={form.calendarColor} onChange={set('calendarColor')} />
+          <div className="flex gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Calendar Color</label>
+              <input type="color" className="h-9 w-16 rounded border border-gray-200 cursor-pointer" value={form.calendarColor} onChange={set('calendarColor')} />
+            </div>
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Hourly Rate (€)</label>
+              <input type="number" step="0.01" min="0" className="input" value={form.hourlyRate} onChange={set('hourlyRate')} placeholder="e.g. 15.00" />
+            </div>
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
           <div className="flex justify-end gap-2 pt-1">

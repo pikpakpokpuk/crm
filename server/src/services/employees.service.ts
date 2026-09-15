@@ -25,7 +25,7 @@ export class EmployeesService {
         skip,
         take: limit,
         orderBy: { name: 'asc' },
-        select: { id: true, name: true, email: true, role: true, active: true, calendarColor: true, createdAt: true, _count: { select: { assignedJobs: true } } },
+        select: { id: true, name: true, email: true, role: true, active: true, calendarColor: true, hourlyRate: true, createdAt: true, _count: { select: { assignedJobs: true } } },
       }),
       prisma.user.count({ where }),
     ]);
@@ -37,7 +37,7 @@ export class EmployeesService {
     const employee = await prisma.user.findUnique({
       where: { id },
       select: {
-        id: true, name: true, email: true, role: true, active: true, calendarColor: true, createdAt: true,
+        id: true, name: true, email: true, role: true, active: true, calendarColor: true, hourlyRate: true, createdAt: true,
         assignedJobs: { orderBy: { createdAt: 'desc' }, take: 10, include: { customer: true } },
       },
     });
@@ -45,12 +45,18 @@ export class EmployeesService {
     return employee;
   }
 
-  async update(id: string, data: Prisma.UserUpdateInput) {
+  async update(id: string, data: Record<string, unknown>) {
     await this.findById(id);
+    const { hourlyRate, ...rest } = data;
     return prisma.user.update({
       where: { id },
-      data,
-      select: { id: true, name: true, email: true, role: true, active: true, calendarColor: true },
+      data: {
+        ...(rest as Prisma.UserUpdateInput),
+        ...(hourlyRate !== undefined
+          ? { hourlyRate: hourlyRate === '' || hourlyRate == null ? null : new Prisma.Decimal(String(hourlyRate)) }
+          : {}),
+      },
+      select: { id: true, name: true, email: true, role: true, active: true, calendarColor: true, hourlyRate: true },
     });
   }
 

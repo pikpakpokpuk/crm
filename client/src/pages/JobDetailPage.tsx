@@ -35,7 +35,7 @@ interface JobDetail {
   assignedTo: { id: string; name: string; email: string } | null;
   scheduledStart: string | null;
   scheduledEnd: string | null;
-  crew: { user: { id: string; name: string; calendarColor: string } }[];
+  crew: { hours: string | null; user: { id: string; name: string; calendarColor: string } }[];
   statusHistory: StatusHistoryEntry[];
   vehicleMake: string | null;
   vehicleModel: string | null;
@@ -70,6 +70,16 @@ interface LineItem {
   unit: string;
   unitPrice: number;
   vatPct: number;
+  costPrice?: number | null;
+}
+
+interface CrewMember { userId: string; hours: string; }
+
+interface JobFinancials {
+  materialRevenue: number; materialCost: number;
+  manpowerRevenue: number; manpowerCost: number;
+  totalRevenue: number; totalCost: number; profit: number;
+  marginPct: number | null; hasIncompleteCostData: boolean;
 }
 
 interface Template { id: string; name: string; }
@@ -147,7 +157,8 @@ export default function JobDetailPage() {
   const [scheduledAt, setScheduledAt] = useState('');
   const [scheduledStart, setScheduledStart] = useState('');
   const [scheduledEnd, setScheduledEnd] = useState('');
-  const [crewUserIds, setCrewUserIds] = useState<string[]>([]);
+  const [crew, setCrew] = useState<CrewMember[]>([]);
+  const [financials, setFinancials] = useState<JobFinancials | null>(null);
   const [estimatedPrice, setEstimatedPrice] = useState('');
   const [notes, setNotes] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState('');
@@ -177,7 +188,7 @@ export default function JobDetailPage() {
       setScheduledAt(j.scheduledAt ? j.scheduledAt.slice(0, 10) : '');
       setScheduledStart(toDatetimeLocal(j.scheduledStart));
       setScheduledEnd(toDatetimeLocal(j.scheduledEnd));
-      setCrewUserIds(j.crew?.map((c) => c.user.id) ?? []);
+      setCrew(j.crew?.map((c) => ({ userId: c.user.id, hours: c.hours ?? '' })) ?? []);
       setEstimatedPrice(j.estimatedPrice ? String(j.estimatedPrice) : '');
       setNotes(j.notes ?? '');
       setVehicleMake(j.vehicleMake ?? '');
@@ -195,6 +206,7 @@ export default function JobDetailPage() {
         qty: Number(i.qty),
         unitPrice: Number(i.unitPrice),
         vatPct: Number(i.vatPct),
+        costPrice: i.costPrice != null ? Number(i.costPrice) : null,
       })));
     } catch (err) {
       console.error(err);
@@ -205,6 +217,7 @@ export default function JobDetailPage() {
 
   useEffect(() => {
     loadJob();
+    if (id) api.get<JobFinancials>(`/jobs/${id}/financials`).then(setFinancials).catch(console.error);
     api.get<{ employees: EmployeeOption[] }>('/employees?limit=100').then((r) => setEmployees(r.employees)).catch(console.error);
     api.get<Template[]>('/documents').then((ts) => {
       setTemplates(ts);
@@ -266,7 +279,7 @@ export default function JobDetailPage() {
         scheduledAt: scheduledAt || null,
         scheduledStart: scheduledStart ? new Date(scheduledStart).toISOString() : null,
         scheduledEnd: scheduledEnd ? new Date(scheduledEnd).toISOString() : null,
-        crewUserIds,
+        crew: crew.map((c) => ({ userId: c.userId, hours: c.hours || null })),
         estimatedPrice: estimatedPrice ? parseFloat(estimatedPrice) : null,
         notes: notes || null,
         vehicleMake: vehicleMake || null,
@@ -282,6 +295,7 @@ export default function JobDetailPage() {
         setOriginalStatus(status);
       }
       await api.put(`/jobs/${id}/items`, { items });
+      api.get<JobFinancials>(`/jobs/${id}/financials`).then(setFinancials).catch(console.error);
     } catch (err: unknown) {
       setSaveError(err instanceof Error ? err.message : 'Save failed');
     } finally {
@@ -289,11 +303,11 @@ export default function JobDetailPage() {
     }
   };
 
-  const updateItem = (itemId: string, field: keyof LineItem, value: string | number) =>
+  const updateItem = (itemId: string, field: keyof LineItem, value: string | number | null) =>
     setItems((prev) => prev.map((i) => (i.id === itemId ? { ...i, [field]: value } : i)));
 
   const addItem = () =>
-    setItems((prev) => [...prev, { id: Date.now().toString(), name: '', type: 'service', qty: 1, unit: 'hr', unitPrice: 0, vatPct: 27 }]);
+    setItems((prev) => [...prev, { id: Date.now().toString(), name: '', type: 'service', qty: 1, unit: 'hr', unitPrice: 0, vatPct: 27, costPrice: null }]);
 
   const removeItem = (itemId: string) =>
     setItems((prev) => prev.filter((i) => i.id !== itemId));
@@ -530,21 +544,32 @@ export default function JobDetailPage() {
             </Field>
 
             <div className="sm:col-span-2">
-              <Field label="Crew (shows on Calendar)">
-                <div className="flex flex-wrap gap-3 pt-1">
-                  {employees.map((emp) => (
-                    <label key={emp.id} className="flex items-center gap-1.5 text-sm cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={crewUserIds.includes(emp.id)}
-                        onChange={(e) => setCrewUserIds((prev) =>
-                          e.target.checked ? [...prev, emp.id] : prev.filter((id) => id !== emp.id)
+              <Field label="Crew (shows on Calendar; hours feed cost stats)">
+                <div className="flex flex-col gap-2 pt-1">
+                  {employees.map((emp) => {
+                    const member = crew.find((c) => c.userId === emp.id);
+                    return (
+                      <label key={emp.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={!!member}
+                          onChange={(e) => setCrew((prev) =>
+                            e.target.checked ? [...prev, { userId: emp.id, hours: '' }] : prev.filter((c) => c.userId !== emp.id)
+                          )}
+                        />
+                        <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: emp.calendarColor ?? '#9ca3af' }} />
+                        <span className="w-32 truncate">{emp.name}</span>
+                        {member && (
+                          <input
+                            type="number" min={0} step="0.25" placeholder="hours"
+                            className="input py-0.5 w-24 text-xs"
+                            value={member.hours}
+                            onChange={(e) => setCrew((prev) => prev.map((c) => c.userId === emp.id ? { ...c, hours: e.target.value } : c))}
+                          />
                         )}
-                      />
-                      <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: emp.calendarColor ?? '#9ca3af' }} />
-                      {emp.name}
-                    </label>
-                  ))}
+                      </label>
+                    );
+                  })}
                   {employees.length === 0 && <span className="text-xs text-gray-400">No employees yet.</span>}
                 </div>
               </Field>
@@ -573,6 +598,38 @@ export default function JobDetailPage() {
         </div>
       </div>
 
+      {/* Financials */}
+      {financials && (
+        <div className="card p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <h3 className="font-semibold text-gray-900">Financials</h3>
+            {financials.hasIncompleteCostData && (
+              <span className="text-xs text-yellow-600 flex items-center gap-1" title="Some inventory items, line item costs, or crew hourly rates are missing — cost figures are understated">
+                ⚠ incomplete cost data
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+            <div>
+              <p className="text-xs text-gray-500">Material</p>
+              <p className="text-gray-900">€{financials.materialRevenue.toFixed(2)} rev · €{financials.materialCost.toFixed(2)} cost</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Manpower</p>
+              <p className="text-gray-900">€{financials.manpowerRevenue.toFixed(2)} rev · €{financials.manpowerCost.toFixed(2)} cost</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Profit</p>
+              <p className={`font-semibold ${financials.profit >= 0 ? 'text-green-700' : 'text-red-700'}`}>€{financials.profit.toFixed(2)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Margin</p>
+              <p className="font-semibold text-gray-900">{financials.marginPct != null ? `${financials.marginPct.toFixed(1)}%` : '—'}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Products & Services Table */}
       <div className="card overflow-hidden">
         <div className="flex items-center justify-between p-5 border-b border-gray-100">
@@ -593,6 +650,7 @@ export default function JobDetailPage() {
                 <th className="px-4 py-3 font-medium w-20">Qty</th>
                 <th className="px-4 py-3 font-medium w-20">Unit</th>
                 <th className="px-4 py-3 font-medium w-28">Unit Price (€)</th>
+                <th className="px-4 py-3 font-medium w-24">Cost (€)</th>
                 <th className="px-4 py-3 font-medium w-20">VAT %</th>
                 <th className="px-4 py-3 font-medium w-28 text-right">Net</th>
                 <th className="px-4 py-3 font-medium w-28 text-right">Gross</th>
@@ -623,6 +681,14 @@ export default function JobDetailPage() {
                     </td>
                     <td className="px-4 py-2">
                       <input type="number" className="input py-1" value={item.unitPrice} min={0} onChange={(e) => updateItem(item.id, 'unitPrice', parseFloat(e.target.value) || 0)} />
+                    </td>
+                    <td className="px-4 py-2">
+                      <input
+                        type="number" className="input py-1" min={0}
+                        value={item.costPrice ?? ''}
+                        placeholder="—"
+                        onChange={(e) => updateItem(item.id, 'costPrice', e.target.value === '' ? null : parseFloat(e.target.value) || 0)}
+                      />
                     </td>
                     <td className="px-4 py-2">
                       <input type="number" className="input py-1" value={item.vatPct} min={0} max={100} onChange={(e) => updateItem(item.id, 'vatPct', parseFloat(e.target.value) || 0)} />

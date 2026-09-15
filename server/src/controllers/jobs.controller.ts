@@ -85,6 +85,16 @@ export class JobsController {
       next(err);
     }
   }
+
+  async getFinancials(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const statsService = (await import('../services/stats.service')).default;
+      const financials = await statsService.getJobFinancials(req.params.id as string);
+      res.json(financials);
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 export default new JobsController();

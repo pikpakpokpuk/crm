@@ -7,6 +7,7 @@ import DashboardPage from '@/pages/DashboardPage';
 import JobsPage from '@/pages/JobsPage';
 import JobDetailPage from '@/pages/JobDetailPage';
 import CalendarPage from '@/pages/CalendarPage';
+import StatisticsPage from '@/pages/StatisticsPage';
 import CustomersPage from '@/pages/CustomersPage';
 import EmployeesPage from '@/pages/EmployeesPage';
 import InventoryPage from '@/pages/InventoryPage';
@@ -32,6 +33,7 @@ export default function App() {
             <Route path="jobs" element={<JobsPage />} />
             <Route path="jobs/:id" element={<JobDetailPage />} />
             <Route path="calendar" element={<CalendarPage />} />
+            <Route path="statistics" element={<StatisticsPage />} />
             <Route path="customers" element={<CustomersPage />} />
             <Route path="employees" element={<EmployeesPage />} />
             <Route path="inventory" element={<InventoryPage />} />
