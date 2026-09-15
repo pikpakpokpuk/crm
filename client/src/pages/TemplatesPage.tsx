@@ -113,7 +113,12 @@ export default function TemplatesPage() {
       fd.append('file', file);
       fd.append('name', uploadName);
       fd.append('type', uploadType);
-      const res = await fetch('/api/documents', { method: 'POST', body: fd });
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/documents', {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        body: fd,
+      });
       if (!res.ok) throw new Error('Upload failed');
       const tmpl = await res.json();
       setTemplates((prev) => [tmpl, ...prev]);
