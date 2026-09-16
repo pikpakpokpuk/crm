@@ -14,6 +14,7 @@ interface StatusHistoryEntry {
 
 interface JobDetail {
   id: string;
+  version: number;
   createdAt: string;
   description: string;
   damageType: string | null;
@@ -266,11 +267,12 @@ export default function JobDetailPage() {
   };
 
   const save = async () => {
-    if (!id) return;
+    if (!id || !job) return;
     setSaving(true);
     setSaveError('');
     try {
-      await api.put(`/jobs/${id}`, {
+      const updated = await api.put<JobDetail>(`/jobs/${id}`, {
+        version: job.version,
         description,
         damageType: damageType || null,
         priority: priority.toUpperCase(),
@@ -290,9 +292,11 @@ export default function JobDetailPage() {
         vehicleColor: vehicleColor || null,
         vehicleMileage: vehicleMileage ? parseInt(vehicleMileage) : null,
       });
+      setJob((prev) => (prev ? { ...prev, version: updated.version } : prev));
       if (status !== originalStatus) {
         await api.patch(`/jobs/${id}/status`, { status: status.toUpperCase() });
         setOriginalStatus(status);
+        setJob((prev) => (prev ? { ...prev, version: prev.version + 1 } : prev));
       }
       await api.put(`/jobs/${id}/items`, { items });
       api.get<JobFinancials>(`/jobs/${id}/financials`).then(setFinancials).catch(console.error);
@@ -437,7 +441,14 @@ export default function JobDetailPage() {
               </button>
             </div>
           )}
-          {saveError && <span className="text-red-600 text-xs">{saveError}</span>}
+          {saveError && (
+            <span className="text-red-600 text-xs flex items-center gap-2">
+              {saveError}
+              {saveError.includes('changed by someone else') && (
+                <button className="underline font-medium" onClick={() => window.location.reload()}>Reload</button>
+              )}
+            </span>
+          )}
           <button className="btn btn-primary" onClick={save} disabled={saving}>
             {saving ? 'Saving...' : 'Save'}
           </button>

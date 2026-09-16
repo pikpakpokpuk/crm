@@ -1,6 +1,7 @@
 import app from './app';
 import prisma from './prisma/client';
 import { whatsappService } from './services/whatsapp.service';
+import { startBackupScheduler } from './services/backup.scheduler';
 
 const PORT = parseInt(process.env.PORT ?? '5000');
 
@@ -9,6 +10,7 @@ async function main() {
   console.log('Database connected');
 
   whatsappService.initialize();
+  startBackupScheduler();
 
   app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);

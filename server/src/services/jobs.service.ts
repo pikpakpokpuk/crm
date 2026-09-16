@@ -49,7 +49,7 @@ export class JobsService {
   }
 
   private sanitize(data: Record<string, unknown>) {
-    const { crew: _crew, ...rest } = data;
+    const { crew: _crew, version: _version, ...rest } = data;
     return {
       ...rest,
       scheduledAt: data.scheduledAt ? new Date(data.scheduledAt as string) : null,
@@ -89,8 +89,15 @@ export class JobsService {
   }
 
   async update(id: string, data: Record<string, unknown>, userId?: string) {
-    await this.findById(id);
-    const job = await prisma.job.update({ where: { id }, data: this.sanitize(data) as Prisma.JobUncheckedUpdateInput, include: JOB_INCLUDE });
+    const current = await this.findById(id);
+    if (data.version !== undefined && Number(data.version) !== current.version) {
+      throw new AppError(409, 'This job was changed by someone else since you loaded it. Reload the page and try again.');
+    }
+    const job = await prisma.job.update({
+      where: { id },
+      data: { ...(this.sanitize(data) as Prisma.JobUncheckedUpdateInput), version: { increment: 1 } },
+      include: JOB_INCLUDE,
+    });
     if (data.crew !== undefined) await this.syncCrew(id, data.crew);
     await logActivity(id, userId ?? null, 'JOB_UPDATED', 'Job details updated');
     return this.findById(job.id);
@@ -101,7 +108,7 @@ export class JobsService {
     const [job] = await prisma.$transaction([
       prisma.job.update({
         where: { id },
-        data: { status, completedAt: status === 'DELIVERED' ? new Date() : undefined },
+        data: { status, completedAt: status === 'DELIVERED' ? new Date() : undefined, version: { increment: 1 } },
         include: JOB_INCLUDE,
       }),
       prisma.jobStatusHistory.create({ data: { jobId: id, status, changedBy: userId, note } }),
