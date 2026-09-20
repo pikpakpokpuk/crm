@@ -29,10 +29,10 @@ class WhatsAppService {
 
     // Kill any orphaned Chrome/Chromium process using this profile dir
     try {
-      execSync(
-        `powershell -Command "Get-WmiObject Win32_Process | Where-Object { $_.CommandLine -like '*whatsapp-auth*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"`,
-        { stdio: 'ignore', timeout: 8000 }
-      );
+      const killCmd = process.platform === 'win32'
+        ? `powershell -Command "Get-WmiObject Win32_Process | Where-Object { $_.CommandLine -like '*whatsapp-auth*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"`
+        : `pkill -f whatsapp-auth`;
+      execSync(killCmd, { stdio: 'ignore', timeout: 8000 });
       // Wait for process to fully exit
       await new Promise((r) => setTimeout(r, 1500));
     } catch { /* ignore on non-Windows or if no process found */ }

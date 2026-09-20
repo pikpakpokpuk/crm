@@ -8,8 +8,10 @@ module.exports = {
       autorestart: true,
       max_restarts: 10,
       min_uptime: '5s',
+      time: true, // timestamp log lines
       env: {
         NODE_ENV: 'production',
+        TRUST_PROXY: '1', // running behind Caddy
       },
     },
   ],

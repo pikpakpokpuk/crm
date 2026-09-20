@@ -1,0 +1,28 @@
+# Replace crm.example.com with your real domain (its DNS A record must point at
+# this server). Caddy obtains and renews the HTTPS certificate automatically.
+crm.example.com {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# API -> Node process (only listens on localhost)
+	handle /api/* {
+		request_body {
+			max_size 12MB
+		}
+		reverse_proxy localhost:5000
+	}
+
+	# Everything else -> the built React app (single-page-app fallback)
+	handle {
+		root * /srv/crm/client/dist
+		try_files {path} /index.html
+		file_server
+	}
+}

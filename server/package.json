@@ -11,6 +11,7 @@
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
     "db:seed": "ts-node --transpile-only src/seed.ts",
+    "admin:create": "ts-node --transpile-only src/scripts/create-admin.ts",
     "db:backup": "ts-node --transpile-only src/scripts/backup.ts",
     "db:restore": "ts-node --transpile-only src/scripts/restore.ts"
   },
