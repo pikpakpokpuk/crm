@@ -5,6 +5,9 @@ import { AppError } from '../middleware/error.middleware';
 
 export class AuthService {
   async login(email: string, password: string) {
+    if (typeof email !== 'string' || typeof password !== 'string' || !email || !password) {
+      throw new AppError(400, 'Email and password are required');
+    }
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user || !user.active) throw new AppError(401, 'Invalid credentials');
 
@@ -18,17 +21,6 @@ export class AuthService {
     );
 
     return { token, user: { id: user.id, email: user.email, name: user.name, role: user.role } };
-  }
-
-  async createUser(data: { email: string; password: string; name: string; role?: 'ADMIN' | 'EMPLOYEE' }) {
-    const existing = await prisma.user.findUnique({ where: { email: data.email } });
-    if (existing) throw new AppError(409, 'Email already in use');
-
-    const passwordHash = await bcrypt.hash(data.password, 12);
-    return prisma.user.create({
-      data: { email: data.email, passwordHash, name: data.name, role: data.role ?? 'EMPLOYEE' },
-      select: { id: true, email: true, name: true, role: true, createdAt: true },
-    });
   }
 
   async getProfile(userId: string) {

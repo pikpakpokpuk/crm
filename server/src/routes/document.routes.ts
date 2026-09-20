@@ -2,6 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import unzipper from 'unzipper';
 import type { Request, Response, NextFunction } from 'express';
 import documentController from '../controllers/document.controller';
 import { authenticate } from '../middleware/auth.middleware';
@@ -40,12 +41,27 @@ router.use(authenticate);
 
 router.get('/placeholders', documentController.getPlaceholders.bind(documentController));
 router.get('/', documentController.listTemplates.bind(documentController));
+// The client-supplied MIME type is trivially spoofable, so also verify the saved
+// file really is a .docx (a zip containing word/document.xml).
+async function verifyDocx(req: Request, _res: Response, next: NextFunction) {
+  const file = req.file;
+  if (!file) { next(); return; }
+  try {
+    const dir = await unzipper.Open.file(file.path);
+    if (!dir.files.some((f) => f.path === 'word/document.xml')) throw new Error('not a docx');
+    next();
+  } catch {
+    fs.unlink(file.path, () => undefined);
+    next(new AppError(400, 'File is not a valid .docx document'));
+  }
+}
+
 router.post('/', (req: Request, res: Response, next: NextFunction) => {
   upload.single('file')(req, res, (err: unknown) => {
     if (err) { next(new AppError(400, err instanceof Error ? err.message : 'Upload failed')); return; }
     next();
   });
-}, documentController.uploadTemplate.bind(documentController));
+}, verifyDocx, documentController.uploadTemplate.bind(documentController));
 router.delete('/:id', documentController.deleteTemplate.bind(documentController));
 router.post('/:templateId/generate', documentController.generateDocument.bind(documentController));
 

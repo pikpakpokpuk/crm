@@ -1,3 +1,4 @@
+import { validateConfig } from './config';
 import app from './app';
 import prisma from './prisma/client';
 import { whatsappService } from './services/whatsapp.service';
@@ -6,6 +7,7 @@ import { startBackupScheduler } from './services/backup.scheduler';
 const PORT = parseInt(process.env.PORT ?? '5000');
 
 async function main() {
+  validateConfig();
   await prisma.$connect();
   console.log('Database connected');
 

@@ -2,6 +2,7 @@ import { google, sheets_v4 } from 'googleapis';
 import { Prisma } from '@prisma/client';
 import prisma from '../prisma/client';
 import { AppError } from '../middleware/error.middleware';
+import { encrypt, decrypt } from './crypto.service';
 
 const SETTINGS_ID = 'google_sheets';
 
@@ -57,8 +58,8 @@ export class SheetsService {
 
     await prisma.integrationSettings.upsert({
       where: { id: SETTINGS_ID },
-      create: { id: SETTINGS_ID, sheetId, serviceAccountJson },
-      update: { sheetId, serviceAccountJson },
+      create: { id: SETTINGS_ID, sheetId, serviceAccountJson: encrypt(serviceAccountJson) },
+      update: { sheetId, serviceAccountJson: encrypt(serviceAccountJson) },
     });
     return { connected: true, sheetId, serviceAccountEmail: parsed.client_email };
   }
@@ -68,7 +69,7 @@ export class SheetsService {
     if (!settings?.serviceAccountJson || !settings?.sheetId) {
       throw new AppError(400, 'Google Sheets is not configured yet');
     }
-    const credentials = JSON.parse(settings.serviceAccountJson);
+    const credentials = JSON.parse(decrypt(settings.serviceAccountJson));
     const auth = new google.auth.GoogleAuth({ credentials, scopes: ['https://www.googleapis.com/auth/spreadsheets'] });
     return { sheets: google.sheets({ version: 'v4', auth }), sheetId: settings.sheetId };
   }

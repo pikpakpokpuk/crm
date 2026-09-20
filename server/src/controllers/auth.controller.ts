@@ -13,15 +13,6 @@ export class AuthController {
     }
   }
 
-  async register(req: Request, res: Response, next: NextFunction) {
-    try {
-      const user = await authService.createUser(req.body);
-      res.status(201).json(user);
-    } catch (err) {
-      next(err);
-    }
-  }
-
   async me(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const user = await authService.getProfile(req.user!.id);
