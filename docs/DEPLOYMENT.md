@@ -129,6 +129,10 @@ sudo systemctl reload caddy
 
 Visit `https://your-domain`, log in, and change the generated password.
 
+**First thing to do after logging in:** open **Settings → Company Info** and fill in the
+company name, address, tax number, phone and email. Documents (offers, invoices)
+print these details, and generation is refused until a company name is saved.
+
 ## 9. Link WhatsApp
 
 Log in as admin, go to **Settings → WhatsApp**, and scan the QR code from the
@@ -174,9 +178,6 @@ curl localhost:5000/api/health
 
 ## Known gaps before real use
 
-- The **Company Info** card in Settings is a non-saving placeholder, and generated
-  documents currently use hardcoded company details (name, address, tax number).
-  Fix before issuing anything to customers.
 - No password-reset flow: an admin can reset a password with
   `npm run admin:create -- <email> "<Name>"` (works on existing users too).
 - No error monitoring or uptime alerts. At minimum, set up a free external

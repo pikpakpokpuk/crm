@@ -76,6 +76,7 @@ const PLACEHOLDER_GROUPS = [
       { tag: '{company_address}', description: 'Your company address' },
       { tag: '{company_tax_number}', description: 'Your tax number' },
       { tag: '{company_phone}', description: 'Your phone number' },
+      { tag: '{company_email}', description: 'Your email address' },
     ],
   },
 ];
@@ -90,6 +91,7 @@ export default function TemplatesPage() {
   const [uploadName, setUploadName] = useState('');
   const [uploadType, setUploadType] = useState('offer');
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
   const [copiedTag, setCopiedTag] = useState('');
   const [showRef, setShowRef] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -108,6 +110,7 @@ export default function TemplatesPage() {
     const file = fileRef.current?.files?.[0];
     if (!file || !uploadName) return;
     setUploading(true);
+    setUploadError('');
     try {
       const fd = new FormData();
       fd.append('file', file);
@@ -119,13 +122,16 @@ export default function TemplatesPage() {
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         body: fd,
       });
-      if (!res.ok) throw new Error('Upload failed');
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.error ?? 'Upload failed');
+      }
       const tmpl = await res.json();
       setTemplates((prev) => [tmpl, ...prev]);
       setUploadName('');
       if (fileRef.current) fileRef.current.value = '';
     } catch (err) {
-      console.error(err);
+      setUploadError(err instanceof Error ? err.message : 'Upload failed');
     } finally {
       setUploading(false);
     }
@@ -176,6 +182,7 @@ export default function TemplatesPage() {
                 <label className="block text-xs font-medium text-gray-500 mb-1">File (.docx only)</label>
                 <input ref={fileRef} type="file" accept=".docx" className="input py-1.5" />
               </div>
+              {uploadError && <p className="text-sm text-red-600">{uploadError}</p>}
               <button onClick={handleUpload} disabled={uploading || !uploadName} className="btn-primary w-full justify-center">
                 {uploading ? 'Uploading...' : 'Upload Template'}
               </button>

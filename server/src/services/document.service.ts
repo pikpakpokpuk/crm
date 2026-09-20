@@ -54,6 +54,7 @@ export const PLACEHOLDERS = [
   { group: 'Company', tag: '{company_address}', description: 'Your company address' },
   { group: 'Company', tag: '{company_tax_number}', description: 'Your tax number' },
   { group: 'Company', tag: '{company_phone}', description: 'Your phone number' },
+  { group: 'Company', tag: '{company_email}', description: 'Your email address' },
 ];
 
 // ─── Starter template generator ───────────────────────────────────────────────
@@ -289,6 +290,7 @@ export interface JobDocData {
   company_address: string;
   company_tax_number: string;
   company_phone: string;
+  company_email: string;
 }
 
 export default new DocumentService();

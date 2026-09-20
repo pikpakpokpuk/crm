@@ -323,6 +323,7 @@ export default function JobDetailPage() {
   const generateDoc = async () => {
     if (!job || !selectedTemplate) return;
     setGenerating(true);
+    setSaveError('');
     try {
       const body = {
         job_id: job.id,
@@ -355,10 +356,6 @@ export default function JobDetailPage() {
         subtotal: `€${subtotal.toFixed(2)}`,
         vat_total: `€${vatTotal.toFixed(2)}`,
         grand_total: `€${grandTotal.toFixed(2)}`,
-        company_name: 'Garage Kft.',
-        company_address: 'Budapest, Műhely utca 1',
-        company_tax_number: '12345678-2-01',
-        company_phone: '+36 1 123 4567',
       };
       const token = localStorage.getItem('token');
       const res = await fetch(`/api/documents/${selectedTemplate}/generate`, {
@@ -366,7 +363,10 @@ export default function JobDetailPage() {
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error('Generation failed');
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.error ?? 'Document generation failed');
+      }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -375,7 +375,7 @@ export default function JobDetailPage() {
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
-      console.error(err);
+      setSaveError(err instanceof Error ? err.message : 'Document generation failed');
     } finally {
       setGenerating(false);
     }

@@ -219,6 +219,73 @@ function GoogleSheetsSection() {
   );
 }
 
+interface CompanyDetails { name: string; address: string; taxNumber: string; phone: string; email: string }
+const COMPANY_FIELDS: { key: keyof CompanyDetails; label: string; placeholder: string }[] = [
+  { key: 'name', label: 'Company Name', placeholder: 'Your Company Kft.' },
+  { key: 'taxNumber', label: 'Tax Number', placeholder: '12345678-2-41' },
+  { key: 'address', label: 'Address', placeholder: 'Street, City, ZIP' },
+  { key: 'phone', label: 'Phone', placeholder: '+36 ...' },
+  { key: 'email', label: 'Email', placeholder: 'office@company.hu' },
+];
+
+function CompanyInfoSection() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
+  const [form, setForm] = useState<CompanyDetails | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => { api.get<CompanyDetails>('/company').then(setForm).catch(console.error); }, []);
+
+  const save = async () => {
+    if (!form) return;
+    setSaving(true);
+    setMsg(null);
+    try {
+      setForm(await api.put<CompanyDetails>('/company', form));
+      setMsg({ ok: true, text: 'Saved.' });
+    } catch (err: unknown) {
+      setMsg({ ok: false, text: err instanceof Error ? err.message : 'Save failed' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="card p-5">
+      <h3 className="font-semibold text-gray-900 mb-1">Company Info</h3>
+      <p className="text-gray-500 text-sm mb-4">
+        Printed on generated offers and invoices.{!isAdmin && ' Only admins can change this.'}
+      </p>
+      {form && !form.name && (
+        <p className="text-sm text-yellow-700 bg-yellow-50 border border-yellow-200 rounded p-2 mb-3">
+          Not set up yet: documents can't be generated until a company name is saved.
+        </p>
+      )}
+      {form && (
+        <div className="space-y-3">
+          {COMPANY_FIELDS.map((f) => (
+            <div key={f.key}>
+              <label className="block text-xs font-medium text-gray-500 mb-1">{f.label}</label>
+              <input
+                className="input"
+                value={form[f.key]}
+                placeholder={f.placeholder}
+                disabled={!isAdmin}
+                onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
+              />
+            </div>
+          ))}
+          {msg && <p className={`text-sm ${msg.ok ? 'text-green-700' : 'text-red-600'}`}>{msg.text}</p>}
+          {isAdmin && (
+            <button className="btn-primary mt-2" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save Changes'}</button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   return (
     <div className="p-6 space-y-6">
@@ -276,24 +343,7 @@ export default function SettingsPage() {
         <WhatsAppSection />
         <GoogleSheetsSection />
 
-        {/* Company Info */}
-        <div className="card p-5">
-          <h3 className="font-semibold text-gray-900 mb-4">Company Info</h3>
-          <div className="space-y-3">
-            {[
-              { label: 'Company Name', value: 'Garage Kft.' },
-              { label: 'Tax Number', value: '12345678-2-01' },
-              { label: 'Address', value: 'Budapest, Műhely utca 1' },
-              { label: 'Phone', value: '+36 1 123 4567' },
-            ].map((field) => (
-              <div key={field.label}>
-                <label className="block text-xs font-medium text-gray-500 mb-1">{field.label}</label>
-                <input className="input" defaultValue={field.value} />
-              </div>
-            ))}
-            <button className="btn-primary mt-2">Save Changes</button>
-          </div>
-        </div>
+        <CompanyInfoSection />
       </div>
     </div>
   );

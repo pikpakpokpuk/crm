@@ -1,5 +1,7 @@
 import { Response, NextFunction } from 'express';
 import documentService, { generateStarterTemplate, PLACEHOLDERS, type JobDocData } from '../services/document.service';
+import companyService from '../services/company.service';
+import { AppError } from '../middleware/error.middleware';
 import type { AuthRequest } from '../types';
 
 export class DocumentController {
@@ -45,7 +47,19 @@ export class DocumentController {
   async generateDocument(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const { templateId } = req.params as { templateId: string };
-      const jobData = req.body as JobDocData;
+      const company = await companyService.get();
+      if (!company.name) {
+        throw new AppError(400, 'Company details are not set. Ask an admin to fill in Settings → Company Info before generating documents.');
+      }
+      // Company fields always come from the database, never from the client.
+      const jobData: JobDocData = {
+        ...(req.body as JobDocData),
+        company_name: company.name,
+        company_address: company.address,
+        company_tax_number: company.taxNumber,
+        company_phone: company.phone,
+        company_email: company.email,
+      };
       const buffer = await documentService.generateDocument(templateId, jobData);
       const filename = `document-${jobData.job_id}-${Date.now()}.docx`;
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
