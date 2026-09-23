@@ -164,7 +164,7 @@ export class SheetsService {
   private async importCustomerRow(get: (col: string) => string): Promise<'created' | 'updated' | 'skipped'> {
     const id = get('id');
     const email = get('email');
-    if (!get('name') || !get('phone')) throw new Error('name and phone are required');
+    if (!get('name')) throw new Error('name is required');
     const data = {
       name: get('name'), email: email || null, phone: get('phone'),
       address: get('address') || null, taxNumber: get('taxNumber') || null, notes: get('notes') || null,
@@ -173,7 +173,9 @@ export class SheetsService {
       ? await prisma.customer.findUnique({ where: { id } })
       : (email ? await prisma.customer.findUnique({ where: { email } }) : null);
     if (existing) {
-      await prisma.customer.update({ where: { id: existing.id }, data });
+      // A missing or renamed phone column reads as '' — never blank a stored phone from an import.
+      const { phone, ...rest } = data;
+      await prisma.customer.update({ where: { id: existing.id }, data: { ...rest, ...(phone ? { phone } : {}) } });
       return 'updated';
     }
     await prisma.customer.create({ data });
@@ -230,13 +232,18 @@ export class SheetsService {
     const customerEmail = get('customerEmail');
     const customerPhone = get('customerPhone');
 
+    const existing = id ? await prisma.job.findUnique({ where: { id } }) : null;
+
+    let customerId: string | null = null;
     let customer = customerEmail ? await prisma.customer.findUnique({ where: { email: customerEmail } }) : null;
     if (!customer && customerPhone) customer = await prisma.customer.findFirst({ where: { phone: customerPhone } });
-    if (!customer) {
+    if (customer) customerId = customer.id;
+    else if (existing) customerId = existing.customerId; // name-only customers have no email/phone to match on
+    else {
       if (!customerPhone) throw new Error('No matching customer found and no customerPhone given to create one');
-      customer = await prisma.customer.create({
+      customerId = (await prisma.customer.create({
         data: { name: customerEmail || customerPhone, email: customerEmail || null, phone: customerPhone },
-      });
+      })).id;
     }
 
     let assignedToId: string | null = null;
@@ -248,7 +255,7 @@ export class SheetsService {
     }
 
     const data = {
-      customerId: customer.id,
+      customerId,
       assignedToId,
       description: get('description') || 'Imported job',
       damageType: get('damageType') || null,
@@ -268,7 +275,6 @@ export class SheetsService {
       vehicleMileage: get('vehicleMileage') ? parseInt(get('vehicleMileage'), 10) : null,
     };
 
-    const existing = id ? await prisma.job.findUnique({ where: { id } }) : null;
     if (existing) {
       await prisma.job.update({ where: { id: existing.id }, data });
       return 'updated';

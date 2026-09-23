@@ -239,6 +239,7 @@ class WhatsAppService {
   async getMessages(customerPhone: string) {
     const normalized = this.normalizePhone(customerPhone);
     const last9 = normalized.slice(-9);
+    if (!last9) return []; // customer without a phone: endsWith('') would match every message
     return prisma.whatsAppMessage.findMany({
       where: { customerPhone: { endsWith: last9 } },
       orderBy: { timestamp: 'asc' },

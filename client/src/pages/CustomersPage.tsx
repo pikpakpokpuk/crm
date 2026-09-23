@@ -24,7 +24,6 @@ function CustomerModal({
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name.trim()) { setError('Name is required'); return; }
-    if (!form.phone.trim()) { setError('Phone is required'); return; }
     setError('');
     setSaving(true);
     try {
@@ -63,7 +62,7 @@ function CustomerModal({
             <input className="input" value={form.name} onChange={set('name')} placeholder="Full name or company" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Phone <span className="text-red-500">*</span></label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
             <input className="input" value={form.phone} onChange={set('phone')} placeholder="+36 30 123 4567" />
           </div>
           <div>

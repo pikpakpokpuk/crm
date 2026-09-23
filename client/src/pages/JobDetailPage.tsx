@@ -236,7 +236,7 @@ export default function JobDetailPage() {
 
   // WhatsApp: sync history + poll status + messages when tab open
   useEffect(() => {
-    if (activeTab !== 'whatsapp' || !id || !job) return;
+    if (activeTab !== 'whatsapp' || !id || !job || !job.customer.phone) return;
     const phone = encodeURIComponent(job.customer.phone);
     // Sync chat history from WA on tab open
     api.get(`/whatsapp/sync?phone=${phone}`).catch(console.error);
@@ -483,7 +483,7 @@ export default function JobDetailPage() {
             <div className="space-y-1 text-sm">
               <p className="font-semibold text-gray-900 text-base">{job.customer.name}</p>
               <div className="space-y-1 text-gray-600 mt-2">
-                <p>📞 {job.customer.phone}</p>
+                {job.customer.phone ? <p>📞 {job.customer.phone}</p> : <p className="text-gray-400">📞 No phone number yet</p>}
                 {job.customer.email && <p>✉️ {job.customer.email}</p>}
                 {job.customer.address && <p>📍 {job.customer.address}</p>}
                 {job.customer.taxNumber && <p>🧾 {job.customer.taxNumber}</p>}
@@ -814,7 +814,11 @@ export default function JobDetailPage() {
             </span>
           </div>
 
-          {waStatus !== 'connected' ? (
+          {!job.customer.phone ? (
+            <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
+              This customer has no phone number yet. Add one on the Customers page to see their WhatsApp chat.
+            </div>
+          ) : waStatus !== 'connected' ? (
             <div className="flex-1 flex items-center justify-center text-gray-400 text-sm flex-col gap-2">
               <span>WhatsApp not connected.</span>
               <span>Go to Settings → WhatsApp to scan QR code.</span>

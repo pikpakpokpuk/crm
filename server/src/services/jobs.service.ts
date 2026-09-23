@@ -49,7 +49,7 @@ export class JobsService {
   }
 
   private sanitize(data: Record<string, unknown>) {
-    const { crew: _crew, version: _version, ...rest } = data;
+    const { crew: _crew, version: _version, newCustomer: _newCustomer, ...rest } = data;
     return {
       ...rest,
       scheduledAt: data.scheduledAt ? new Date(data.scheduledAt as string) : null,
@@ -81,10 +81,53 @@ export class JobsService {
     ]);
   }
 
+  // Resolves which customer a new job belongs to: an existing one (customerId), or a
+  // brand-new one created from just a name. Runs inside the job-creation transaction.
+  private async resolveCustomer(tx: Prisma.TransactionClient, data: Record<string, unknown>) {
+    if (typeof data.customerId === 'string' && data.customerId) {
+      const existing = await tx.customer.findUnique({ where: { id: data.customerId }, select: { id: true } });
+      if (!existing) throw new AppError(400, 'Selected customer no longer exists');
+      return { id: existing.id, created: false as const, name: '' };
+    }
+
+    const nc = data.newCustomer as { name?: unknown; phone?: unknown } | undefined;
+    const name = typeof nc?.name === 'string' ? nc.name.trim().slice(0, 200) : '';
+    const phone = typeof nc?.phone === 'string' ? nc.phone.trim().slice(0, 50) : '';
+    if (!name) throw new AppError(400, 'Choose a customer, or type a name to create a new one');
+
+    // Guard against silently duplicating someone who already exists. Two different
+    // people can share a name, so a different phone number is enough to allow it.
+    const digits = (p: string) => p.replace(/\D/g, '').slice(-9);
+    const sameName = await tx.customer.findMany({ where: { name: { equals: name, mode: 'insensitive' } }, select: { phone: true } });
+    const clashes = sameName.filter((c) => !phone || !c.phone || digits(c.phone) === digits(phone));
+    if (clashes.length > 0) {
+      // Without a phone on file we can't tell two people apart, so entering a phone can't resolve it.
+      const noPhoneOnFile = clashes.every((c) => !c.phone);
+      throw new AppError(409, noPhoneOnFile
+        ? `A customer named "${name}" already exists (no phone number on file). Pick them from the list, or make the name distinct (e.g. "${name} (Győr)") to create a separate customer.`
+        : `A customer named "${name}" already exists. Pick them from the list, or enter a different phone number to create a separate customer.`);
+    }
+
+    const created = await tx.customer.create({ data: { name, phone } });
+    return { id: created.id, created: true as const, name };
+  }
+
   async create(data: Record<string, unknown>) {
-    const job = await prisma.job.create({ data: this.sanitize(data) as Prisma.JobUncheckedCreateInput, include: JOB_INCLUDE });
+    const { job, customer } = await prisma.$transaction(async (tx) => {
+      const customer = await this.resolveCustomer(tx, data);
+      const job = await tx.job.create({
+        data: { ...(this.sanitize(data) as Prisma.JobUncheckedCreateInput), customerId: customer.id },
+        include: JOB_INCLUDE,
+      });
+      return { job, customer };
+    });
     await this.syncCrew(job.id, data.crew);
-    await logActivity(job.id, (data.createdById as string) ?? null, 'JOB_CREATED', 'Job created');
+    await logActivity(
+      job.id,
+      (data.createdById as string) ?? null,
+      'JOB_CREATED',
+      customer.created ? `Job created (new customer "${customer.name}")` : 'Job created',
+    );
     return this.findById(job.id);
   }
 

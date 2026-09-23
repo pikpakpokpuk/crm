@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '@/lib/api';
-import type { Job, JobStatus, Priority, Customer } from '@/types';
+import type { Job, JobStatus, Priority } from '@/types';
+import CustomerPicker, { type CustomerChoice } from '@/components/CustomerPicker';
 
 const STATUS_COLORS: Record<JobStatus, string> = {
   new: 'bg-gray-100 text-gray-700',
@@ -25,7 +26,6 @@ interface JobsResponse { jobs: Job[]; total: number; page: number; pages: number
 interface EmployeeOption { id: string; name: string; }
 
 interface NewJobForm {
-  customerId: string;
   description: string;
   damageType: string;
   priority: string;
@@ -41,20 +41,19 @@ interface NewJobForm {
 }
 
 const EMPTY_FORM: NewJobForm = {
-  customerId: '', description: '', damageType: '',
+  description: '', damageType: '',
   priority: 'MEDIUM', assignedToId: '', scheduledAt: '', estimatedPrice: '', notes: '',
   vehicleMake: '', vehicleModel: '', vehicleYear: '', vehiclePlate: '', vehicleColor: '',
 };
 
 function NewJobModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const [form, setForm] = useState<NewJobForm>(EMPTY_FORM);
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customer, setCustomer] = useState<CustomerChoice>({ kind: 'none' });
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    api.get<{ customers: Customer[] }>('/customers?limit=100').then((r) => setCustomers(r.customers)).catch(console.error);
     api.get<{ employees: EmployeeOption[] }>('/employees?limit=100').then((r) => setEmployees(r.employees)).catch(console.error);
   }, []);
 
@@ -63,13 +62,15 @@ function NewJobModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.customerId) { setError('Customer is required'); return; }
+    if (customer.kind === 'none') { setError('Pick a customer, or type a name to create a new one'); return; }
     if (!form.description.trim()) { setError('Description is required'); return; }
     setError('');
     setSaving(true);
     try {
       await api.post('/jobs', {
-        customerId: form.customerId,
+        ...(customer.kind === 'existing'
+          ? { customerId: customer.id }
+          : { newCustomer: { name: customer.name, phone: customer.phone.trim() } }),
         description: form.description.trim(),
         damageType: form.damageType.trim() || undefined,
         priority: form.priority,
@@ -103,10 +104,7 @@ function NewJobModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
         <form onSubmit={submit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Customer <span className="text-red-500">*</span></label>
-            <select className="input" value={form.customerId} onChange={set('customerId')}>
-              <option value="">Select customer...</option>
-              {customers.map((c) => <option key={c.id} value={c.id}>{c.name} — {c.phone}</option>)}
-            </select>
+            <CustomerPicker value={customer} onChange={setCustomer} />
           </div>
 
           <div>
