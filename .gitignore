@@ -1,3 +1,7 @@
 whatsapp-auth/
-.claude/
 backups/
+
+# Share the reviewer setup; keep per-machine Claude settings out
+.claude/*
+!.claude/agents/
+!.claude/commands/
