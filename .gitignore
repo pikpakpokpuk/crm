@@ -5,3 +5,6 @@ backups/
 .claude/*
 !.claude/agents/
 !.claude/commands/
+
+# miniCRM export files (real customer data)
+backup/minicrm/
